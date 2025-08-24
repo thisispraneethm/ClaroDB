@@ -3,12 +3,6 @@
 
 ClaroDB is an intelligent, browser-based data workspace designed to democratize data analysis. It bridges the gap between complex data and clear answers by allowing users to ask questions in natural language, transforming curiosity into clarity.
 
-**[Try the Live Demo Here]** *(<- Replace with your live URL)*
-
-![ClaroDB Screenshot](https://storage.googleapis.com/pr-prd-shiny-app-files/e87b7440-42b7-448f-9a5d-4f1e582e0573/screenshot.png)
-
----
-
 ## ✨ Key Features
 
 *   **💬 Conversational SQL**: Ask questions in plain English. ClaroDB uses the Google Gemini API to translate your queries into precise SQL, executes them, and provides answers in seconds.
@@ -44,8 +38,6 @@ ClaroDB is built with a modern, robust, and serverless stack to ensure performan
 ## ⚙️ How It Works (Architecture)
 
 This is a **frontend-only application**. All logic, including AI calls, data loading, storage, and SQL execution, happens directly in the user's browser.
-
-![Architecture Diagram](https://storage.googleapis.com/pr-prd-shiny-app-files/1d041300-8438-4286-9a28-1bce8b7b25e1/clarodb_architecture_v2.png)
 
 1.  **File Upload**: The user uploads one or more files (e.g., CSV, JSON).
 2.  **Parsing & Storage**: The file is parsed and its data is stored securely in a dedicated **IndexedDB** database within the browser. This provides stable, persistent storage for the user's session.
