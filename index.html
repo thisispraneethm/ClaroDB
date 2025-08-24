@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF--8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaroDB</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://rsms.me/">
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              background: '#FFFFFF',
+              'secondary-background': '#F9FAFB',
+              card: '#FFFFFF',
+              text: {
+                DEFAULT: '#1d1d1f',
+                secondary: '#6E6E73',
+              },
+              primary: {
+                DEFAULT: '#007AFF',
+                hover: '#0070e2',
+                foreground: '#FFFFFF',
+              },
+              border: 'rgba(0, 0, 0, 0.07)',
+              input: '#D1D1D6',
+              ring: '#007AFF',
+              success: '#34c759',
+              danger: '#ff3b30',
+              warning: '#ff9500',
+              info: {
+                DEFAULT: '#5856d6',
+                background: 'rgba(88, 86, 214, 0.05)',
+                border: 'rgba(88, 86, 214, 0.2)',
+                text: '#5856d6',
+              },
+            },
+            borderRadius: {
+              xl: '16px',
+              lg: '12px',
+              md: '10px',
+              sm: '8px',
+            },
+            boxShadow: {
+              'card': '0 4px 12px rgba(0,0,0,0.05)',
+              'card-hover': '0 6px 16px rgba(0,0,0,0.07)',
+            },
+            fontFamily: {
+              sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+            },
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.1.1",
+    "react/": "https://esm.sh/react@^19.1.1/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.15.0",
+    "recharts": "https://esm.sh/recharts@^3.1.2",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.8.1",
+    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.540.0",
+    "react-syntax-highlighter": "https://esm.sh/react-syntax-highlighter@^15.6.1",
+    "react-syntax-highlighter/": "https://esm.sh/react-syntax-highlighter@^15.6.1/",
+    "alasql": "https://esm.sh/alasql@^4.2.0",
+    "@heroicons/react/": "https://esm.sh/@heroicons/react@^2.2.0/",
+    "uuid": "https://esm.sh/uuid@^11.1.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-secondary-background">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

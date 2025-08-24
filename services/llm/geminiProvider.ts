@@ -1,0 +1,282 @@
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import { LLMProvider } from './base';
+import { SQLGenerationResult, ChartGenerationResult, TableSchema, InsightGenerationResult, ChartGenerationWithMetadataResult, Join } from '../../types';
+import { LLMGenerationError } from '../../utils/exceptions';
+import { config } from '../../config';
+import { enhancePromptWithSchemaAwareness } from '../../utils/promptEnhancer';
+
+export class GeminiProvider extends LLMProvider {
+  private ai: GoogleGenAI;
+
+  constructor() {
+    super();
+    this.ai = new GoogleGenAI({ apiKey: config.apiKey });
+  }
+
+  private calculateCost(model: string, promptTokens: number, completionTokens: number): number {
+    const pricing = config.llmPricing[model];
+    if (!pricing) return 0;
+    const promptCost = (promptTokens / 1_000_000) * pricing.prompt;
+    const completionCost = (completionTokens / 1_000_000) * pricing.completion;
+    return promptCost + completionCost;
+  }
+
+  async generateSQL(prompt: string, schemas: TableSchema, dialect: string, history: { role: string, content: string }[], dataPreview?: Record<string, Record<string, any>[]>, joins?: Join[]): Promise<SQLGenerationResult> {
+    const allColumns = Object.values(schemas).flat().map(col => col.name);
+    const corrections = enhancePromptWithSchemaAwareness(prompt, allColumns);
+    
+    let correctionHint = "";
+    if (Object.keys(corrections).length > 0) {
+        const hints = Object.entries(corrections).map(([t, c]) => `'${t}'->'${c}'`).join(", ");
+        correctionHint = `\nHINT: The user may have made typos. Apply these corrections: ${hints}.`;
+    }
+
+    const schemasStr = Object.entries(schemas)
+      .map(([name, cols]) => `- Table '${name}' columns: [${cols.map(c => `${c.name} (${c.type})`).join(', ')}]`)
+      .join('\n');
+    
+    let previewStr = "";
+    if (dataPreview && Object.keys(dataPreview).length > 0) {
+        previewStr = "\nHere are some sample rows from the tables:\n";
+        for (const [tableName, rows] of Object.entries(dataPreview)) {
+            if (rows.length > 0) {
+                const headers = Object.keys(rows[0]);
+                const rowsStr = rows.map(row => 
+                    headers.map(h => String(row[h])).join(', ')
+                ).join('\n');
+                previewStr += `- Table '${tableName}' sample data (columns: ${headers.join(', ')}):\n${rowsStr}\n`;
+            }
+        }
+    }
+
+    let joinInstruction = "";
+    if (joins && joins.length > 0) {
+        const joinClauses = joins.map(j => 
+            `- Use a ${j.joinType.toUpperCase()} JOIN between table [${j.table1}] and [${j.table2}] ON [${j.table1}].[${j.column1}] = [${j.table2}].[${j.column2}]`
+        ).join('\n');
+        joinInstruction = `When querying across multiple tables, you MUST adhere to the following user-defined join conditions:\n${joinClauses}`;
+    } else if (Object.keys(schemas).length > 1) {
+        joinInstruction = "- If the user's question requires joining tables, intelligently infer the join columns based on column names and relationships. Explicitly state the join condition in the SQL query (e.g., `FROM table1 JOIN table2 ON table1.id = table2.foreign_id`)."
+    }
+    
+    let dialectSpecificInstruction = "";
+    if (dialect === 'alasql') {
+        dialectSpecificInstruction = `- IMPORTANT: For the 'alasql' dialect, you MUST adhere to these critical rules:
+  - Enclose any column or table name containing spaces or special characters in square brackets (e.g., \`SELECT [Customer Id] FROM [Order Details]\`).
+  - **You MUST NOT use window functions**. Functions like \`LAG()\`, \`LEAD()\`, \`ROW_NUMBER()\`, \`RANK()\`, or any function that uses an \`OVER()\` clause are NOT supported. For complex calculations like year-over-year growth, you must use alternative methods such as self-joins.`;
+    }
+
+    const fewShotExamples = `
+---
+Here are some examples of how to map questions to SQL queries. Adapt these patterns to the provided schema.
+
+## Basic Aggregation
+Question: "total sales for each product"
+SQL: SELECT product_column, SUM(sales_column) FROM table_name GROUP BY product_column;
+
+## Filtering
+Question: "employees in the 'Sales' department"
+SQL: SELECT * FROM employee_table WHERE department_column = 'Sales';
+
+## Joining
+Question: "sales in 'North America' and their sales reps"
+SQL: SELECT t1.product, t1.sales, t2.employee_name FROM sales_table t1 JOIN employee_table t2 ON t1.region_key = t2.region_key WHERE t1.region_key = 'North America';
+
+## Data Enrichment with General Knowledge (CTE and CASE)
+Question: "what is the distribution of orders by continent" (given a table with a 'country' column but no 'continent' column)
+SQL: WITH enriched_orders AS (
+  SELECT
+    *,
+    CASE
+      WHEN country IN ('United States', 'Canada', 'Mexico') THEN 'North America'
+      WHEN country IN ('United Kingdom', 'Germany', 'France', 'Italy', 'Spain') THEN 'Europe'
+      WHEN country IN ('China', 'India', 'Japan', 'South Korea') THEN 'Asia'
+      WHEN country IN ('Brazil', 'Argentina', 'Colombia') THEN 'South America'
+      WHEN country IN ('Nigeria', 'Egypt', 'South Africa') THEN 'Africa'
+      WHEN country IN ('Australia', 'New Zealand') THEN 'Oceania'
+      ELSE 'Other'
+    END AS continent
+  FROM orders
+)
+SELECT
+  continent,
+  COUNT(order_id) AS number_of_orders
+FROM enriched_orders
+WHERE continent IS NOT NULL
+GROUP BY
+  continent
+ORDER BY
+  number_of_orders DESC;
+---
+`;
+
+    const systemPrompt = `You are a precise, world-class SQL generator. Your sole purpose is to translate a natural language question into a single, valid SQL query for the ${dialect} dialect.
+Constraints:
+- Return ONLY the raw SQL query. Do not include explanations, comments, or markdown formatting like \`\`\`sql.
+- Your entire response must be only the SQL query.
+- Always qualify columns with table names or aliases (e.g., \`sales.product\`).
+- If the question asks for a metric "by" or "for each" of a certain category (e.g., "sales by region", "count of users per country"), you MUST use a GROUP BY clause.
+- **Intelligent Data Enrichment**: You MAY use your general world knowledge to enrich the data. If a question requires a column that is not in the schema but can be logically derived from existing columns (e.g., deriving 'continent' from a 'country' column, or 'day_of_week' from a 'date' column), you MUST generate SQL that creates this new column on the fly, typically using a Common Table Expression (CTE) with a CASE statement.
+- Never hallucinate tables or columns that are not present in the provided schema. The only exception is for new columns that are logically derived from existing data as part of a CTE (e.g., deriving a 'continent' column from a 'country' column).
+- If the question is ambiguous, choose the most conservative interpretation.
+- Return at most 1000 rows unless the user specifies a different limit.
+${dialectSpecificInstruction}
+${joinInstruction}
+${fewShotExamples}
+Schema:
+${schemasStr}
+${previewStr}
+${correctionHint}`;
+
+    try {
+      const modelName = 'gemini-2.5-flash';
+      
+      const geminiHistory = history.map(h => ({
+        role: h.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: h.content }]
+      }));
+
+      const contents = [...geminiHistory, { role: 'user', parts: [{ text: prompt }] }];
+      
+      const response: GenerateContentResponse = await this.ai.models.generateContent({
+        model: modelName,
+        contents: contents,
+        config: {
+            systemInstruction: systemPrompt,
+        }
+      });
+      
+      const sqlQuery = response.text.replace(/```sql/g, '').replace(/```/g, '').trim();
+
+      const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
+      const completionTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
+      const cost = this.calculateCost(modelName, promptTokens, completionTokens);
+
+      return {
+        sql: sqlQuery,
+        model: modelName,
+        cost: cost,
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+      };
+    } catch (e: any)      {
+      // Attempt to parse a nested error message if it's a JSON string
+      let errorMessage = e.message || 'An unknown error occurred.';
+      if (typeof e.message === 'string' && e.message.includes('Proxying failed')) {
+          try {
+              const errorObj = JSON.parse(e.message.substring(e.message.indexOf('{')));
+              errorMessage = `${errorObj.error}: ${errorObj.details}`;
+          } catch (_) {
+            // Keep original message if parsing fails
+          }
+      }
+      throw new LLMGenerationError(`Gemini SQL generation failed: ${errorMessage}`);
+    }
+  }
+
+  async generateInsights(question: string, data: Record<string, any>[]): Promise<InsightGenerationResult> {
+    const dataPreview = JSON.stringify(data.slice(0, 50), null, 2); // Increased preview to 50 as per spec
+    const prompt = `Context: The user asked "${question}".
+Result sample (first 50 rows): 
+${dataPreview}`;
+    
+    try {
+      const modelName = 'gemini-2.5-flash';
+      const response = await this.ai.models.generateContent({
+        model: modelName,
+        contents: prompt,
+        config: {
+           systemInstruction: `You generate a crisp, factual summary of a query result for a business audience.
+- Explain the key pattern in 5 sentences or less.
+- Use column names and units; avoid speculation.
+- If the result might be truncated (e.g., has 50 rows), mention that the data is a sample.
+- Use markdown for formatting (e.g., lists, bold text).`
+        }
+      });
+      
+      const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
+      const completionTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
+      const cost = this.calculateCost(modelName, promptTokens, completionTokens);
+
+      return {
+        insights: response.text || "No insights generated.",
+        model: modelName,
+        cost: cost,
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+      };
+    } catch (e: any) {
+      throw new LLMGenerationError(`Gemini insight generation failed: ${e.message}`);
+    }
+  }
+
+  async generateChart(question: string, data: Record<string, any>[]): Promise<ChartGenerationWithMetadataResult> {
+    if (data.length === 0 || Object.keys(data[0]).length < 2) {
+        return {
+            chartConfig: null,
+            model: 'N/A',
+            cost: 0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
+        };
+    }
+    const columns = Object.keys(data[0]);
+    const dataPreview = JSON.stringify(data.slice(0, 5), null, 2);
+    const modelName = "gemini-2.5-flash";
+
+    const systemPrompt = `You are a data visualization expert. Your task is to analyze a user's question and a dataset to determine the best chart representation.
+- User's question: "${question}"
+- Available columns: ${columns.join(', ')}
+- Data preview: ${dataPreview}
+- Your output must be a single, valid JSON object with no other text or formatting.
+- The JSON must conform to the provided schema.
+- Choose the best chart type from: 'bar', 'line', 'pie', 'scatter'.
+- For pie charts, 'nameKey' should be the label for slices and 'dataKey' the value. A good pie chart typically has a categorical 'nameKey' and a numeric 'dataKey'.
+- For other charts, 'nameKey' is the X-axis and 'dataKey' is the Y-axis.
+- The 'title' should be a concise and descriptive title for the chart.`;
+
+    try {
+        const response = await this.ai.models.generateContent({
+            model: modelName,
+            contents: "Generate the chart configuration JSON for the provided context.",
+            config: {
+                systemInstruction: systemPrompt,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        chartType: { type: Type.STRING, enum: ['bar', 'line', 'pie', 'scatter'], description: 'The type of chart to render.' },
+                        dataKey: { type: Type.STRING, description: 'The column name for the primary metric (Y-axis or pie value).' },
+                        nameKey: { type: Type.STRING, description: 'The column name for the category or label (X-axis or pie label).' },
+                        title: { type: Type.STRING, description: 'A descriptive title for the chart.' }
+                    },
+                    required: ["chartType", "dataKey", "nameKey", "title"]
+                },
+            },
+        });
+
+      const jsonStr = response.text.trim();
+      const chartConfig = JSON.parse(jsonStr) as ChartGenerationResult;
+      const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
+      const completionTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
+      const cost = this.calculateCost(modelName, promptTokens, completionTokens);
+
+      return {
+        chartConfig,
+        model: modelName,
+        cost,
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens
+      };
+    } catch (e: any) {
+      console.error("Chart generation failed, returning null.", e)
+      return {
+          chartConfig: null,
+          model: modelName,
+          cost: 0,
+          prompt_tokens: 0,
+          completion_tokens: 0,
+      };
+    }
+  }
+}
