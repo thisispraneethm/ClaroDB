@@ -1,16 +1,15 @@
-
-import { DataHandler } from './base';
-import { TableSchema, DataProfile } from '../../types';
+import { DataHandler, Correction } from './base';
+import { TableSchema } from '../../types';
 import { DataProcessingError, QueryExecutionError } from '../../utils/exceptions';
 // @ts-ignore
 import alasql from 'alasql';
-import { v4 as uuidv4 } from 'uuid';
 import { IndexedDBManager } from '../db/indexedDBManager';
 
 export interface FileSource {
     name: string;
     file: File;
 }
+const CORRECTIONS_STORE_NAME = 'corrections';
 
 export class FileDataHandler extends DataHandler {
     private dbManager: IndexedDBManager | null = null;
@@ -45,7 +44,9 @@ export class FileDataHandler extends DataHandler {
                  return;
             }
             
-            const storeNames = sources.map(s => s.name);
+            const workingStoreNames = sources.map(s => s.name);
+            const originalStoreNames = sources.map(s => `${s.name}_original`);
+            const storeNames = [...workingStoreNames, ...originalStoreNames, CORRECTIONS_STORE_NAME];
             await this.dbManager.open(storeNames);
             
             const tryParseStructured = (content: string): Record<string, any>[] | null => {
@@ -66,31 +67,38 @@ export class FileDataHandler extends DataHandler {
                 const extension = source.file.name.split('.').pop()?.toLowerCase();
                 const fileContent = await source.file.text();
                 
-                if (fileContent.trim() === '') continue;
-                
-                let data: Record<string, any>[];
-                let structuredData: Record<string, any>[] | null = null;
-                
-                if (extension === 'csv' || extension === 'txt') {
-                    structuredData = tryParseStructured(fileContent);
+                if (fileContent.trim() === '') {
+                    throw new DataProcessingError(`File '${source.file.name}' appears to be empty.`);
                 }
-
-                if (structuredData) {
-                    data = structuredData;
-                } else if (extension === 'json') {
+                
+                let data: Record<string, any>[] | null = null;
+                
+                if (extension === 'json') {
                     try {
                         const parsedJson = JSON.parse(fileContent);
                         data = Array.isArray(parsedJson) ? parsedJson : [parsedJson];
                     } catch (e: any) {
-                        throw new DataProcessingError(`Failed to parse JSON file ${source.file.name}: ${e.message}`);
+                        throw new DataProcessingError(`Failed to parse JSON file '${source.file.name}'. Please ensure it contains valid JSON. Error: ${e.message}`);
                     }
                 } else {
-                    const lines = fileContent.replace(/\r\n/g, '\n').split('\n').filter(l => l.trim() !== '');
-                    data = lines.map(line => ({ "text_line": line }));
+                    data = tryParseStructured(fileContent);
+                    // If it's a CSV and parsing fails, it's an error. Don't fall back to unstructured text.
+                    if (data === null && extension === 'csv') {
+                        throw new DataProcessingError(`Failed to parse CSV file '${source.file.name}'. Please ensure it has a header row and uses a standard delimiter (like comma or tab).`);
+                    }
+                    // For other file types (like .txt), if parsing fails, fall back to unstructured.
+                    if (data === null) {
+                        const lines = fileContent.replace(/\r\n/g, '\n').split('\n').filter(l => l.trim() !== '');
+                        data = lines.map(line => ({ "text_line": line }));
+                    }
                 }
                 
-                if (!data || data.length === 0) continue;
+                if (!data || data.length === 0) {
+                    throw new DataProcessingError(`Could not extract any data from '${source.file.name}'. The file may be empty or in an unsupported format.`);
+                }
                 
+                // Store both the original data and the working copy. Sampling will affect the working copy only.
+                await this.dbManager.addData(`${source.name}_original`, data);
                 await this.dbManager.addData(source.name, data);
                 this.tableNames.push(source.name);
             }
@@ -102,32 +110,30 @@ export class FileDataHandler extends DataHandler {
         }
     }
 
-    async applySampling(tableName: string, method: 'random' | 'stratified', size: number, stratifyColumn?: string): Promise<void> {
+    async applySampling(tableName: string, method: 'random' | 'stratified', size: number, stratifyColumn?: string): Promise<boolean> {
         this.checkDbManager();
         
-        const original = await this.dbManager.getData(tableName);
+        const original = await this.dbManager.getData(`${tableName}_original`);
         if (!original) {
             throw new DataProcessingError(`Original data for table ${tableName} not found.`);
         }
 
         const totalRows = original.length;
         if (size >= totalRows) {
-            await this.dbManager.addData(tableName, original); // Restore original if sample is larger
-            return;
+            await this.dbManager.addData(tableName, original); // Restore full original data
+            return false; // Not sampled
         }
 
         let sampledData: Record<string, any>[];
 
-        // Use AlaSQL for in-memory sampling of the data fetched from IndexedDB
         if (method === 'random') {
-             const tempDb = new alasql.Database();
-             tempDb.exec(`CREATE TABLE temp_table`);
-             (tempDb.tables['temp_table'] as any).data = original;
-             const percentage = (size / totalRows) * 100;
-             sampledData = tempDb.exec(`SELECT * FROM temp_table TABLESAMPLE BERNOULLI (${percentage})`);
-             if (sampledData.length > size) {
-                sampledData = sampledData.slice(0, size);
+            // AlaSQL's TABLESAMPLE is not supported. Implement random sampling using Fisher-Yates shuffle.
+            const shuffled = [...original]; // Create a shallow copy
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
             }
+            sampledData = shuffled.slice(0, size);
         } else if (method === 'stratified') {
             if (!stratifyColumn) throw new DataProcessingError("A column must be specified for stratified sampling.");
             const groups: Record<string, Record<string, any>[]> = {};
@@ -149,24 +155,7 @@ export class FileDataHandler extends DataHandler {
         }
         
         await this.dbManager.addData(tableName, sampledData);
-    }
-
-
-    async profileData(tableName: string): Promise<DataProfile[]> {
-        this.checkDbManager();
-        const data = await this.dbManager.getData(tableName);
-        if (!data || data.length === 0) return [];
-        
-        const totalRows = data.length;
-        const columns = Object.keys(data[0]);
-        
-        return columns.map(col => {
-            const filled = data.filter(row => row[col] !== null && row[col] !== undefined && row[col] !== '').length;
-            const missingCount = totalRows - filled;
-            const missingPercentage = ((missingCount / totalRows) * 100).toFixed(1);
-            const type = typeof data[0][col] === 'number' ? 'NUMBER' : 'TEXT';
-            return { column: col, type, filled, missing: `${missingPercentage}%` };
-        });
+        return true; // Sampled
     }
 
     async getSchemas(): Promise<TableSchema> {
@@ -225,7 +214,20 @@ export class FileDataHandler extends DataHandler {
             
             return tempDb.exec(query);
         } catch (e: any) {
-            throw new QueryExecutionError(`Failed to execute query: ${e.message}`);
+            let friendlyMessage = e.message;
+            if (typeof friendlyMessage === 'string') {
+                if (friendlyMessage.toLowerCase().includes("table does not exist")) {
+                    const missingTable = friendlyMessage.match(/table does not exist\s*:\s*(\w+)/i);
+                    friendlyMessage = `I tried to query a table named '${missingTable ? missingTable[1] : 'unknown'}' which doesn't seem to exist. Please check the schema and try again.`;
+                } else if (friendlyMessage.toLowerCase().includes("column does not exist")) {
+                    friendlyMessage = `I tried to use a column that doesn't exist. Please check the schema and try rephrasing your question.`;
+                } else if (friendlyMessage.toLowerCase().includes("syntax error")) {
+                    friendlyMessage = `I generated a query with invalid syntax. This may be a bug. Could you try asking in a different way?`;
+                }
+            } else {
+                friendlyMessage = "An unexpected error occurred while running the query.";
+            }
+            throw new QueryExecutionError(friendlyMessage);
         }
     }
 
@@ -239,5 +241,17 @@ export class FileDataHandler extends DataHandler {
             this.dbManager = null;
             this.tableNames = [];
         }
+    }
+
+    async addCorrection(correction: Correction): Promise<void> {
+        this.checkDbManager();
+        await this.dbManager.appendData(CORRECTIONS_STORE_NAME, correction);
+    }
+
+    async getCorrections(limit: number): Promise<Correction[]> {
+        this.checkDbManager();
+        // FIX: Cast the result from getData to Correction[] as we know the data shape for this store.
+        const allCorrections = await this.dbManager.getData(CORRECTIONS_STORE_NAME) as Correction[];
+        return allCorrections.slice(-limit);
     }
 }

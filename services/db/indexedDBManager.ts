@@ -1,3 +1,4 @@
+
 export class IndexedDBManager {
     private db: IDBDatabase | null = null;
     private dbName: string;
@@ -72,6 +73,18 @@ export class IndexedDBManager {
             transaction.onerror = () => reject(new Error(`Failed to add data to ${storeName}.`));
         });
     }
+    
+    public appendData(storeName: string, item: Record<string, any>): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const db = this.getDb();
+            const transaction = db.transaction(storeName, 'readwrite');
+            const store = transaction.objectStore(storeName);
+            const request = store.add(item);
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(new Error(`Failed to append data to ${storeName}.`));
+        });
+    }
 
     public getData(storeName: string): Promise<Record<string, any>[]> {
         return new Promise((resolve, reject) => {
@@ -116,8 +129,6 @@ export class IndexedDBManager {
             deleteRequest.onsuccess = () => resolve();
             deleteRequest.onerror = () => reject(new Error("Failed to delete IndexedDB."));
             deleteRequest.onblocked = () => {
-                // This can happen if other tabs have the DB open. For this app's lifecycle,
-                // we can often resolve by just accepting it.
                 console.warn("IndexedDB deletion blocked. This might happen if another tab is open.");
                 resolve();
             };

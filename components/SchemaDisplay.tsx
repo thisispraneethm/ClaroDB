@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { TableSchema } from '../types';
 import { Table2 } from 'lucide-react';

@@ -28,11 +28,14 @@ const FileListItem: React.FC<{ file: File; onRemove: () => void, disabled?: bool
 
 const MultiFileUpload: React.FC<MultiFileUploadProps> = ({ files, onFilesChange, disabled = false }) => {
   
-  const handleFileAdd = (newFile: File | null) => {
-    if (newFile) {
+  const handleFilesAdd = (newFiles: File[]) => {
+    if (newFiles.length > 0) {
       // Prevent adding the same file multiple times
-      if (!files.some(f => f.name === newFile.name && f.size === newFile.size)) {
-        onFilesChange([...files, newFile]);
+      const filesToAdd = newFiles.filter(newFile => 
+        !files.some(f => f.name === newFile.name && f.size === newFile.size && f.lastModified === newFile.lastModified)
+      );
+      if (filesToAdd.length > 0) {
+        onFilesChange([...files, ...filesToAdd]);
       }
     }
   };
@@ -48,15 +51,16 @@ const MultiFileUpload: React.FC<MultiFileUploadProps> = ({ files, onFilesChange,
       {files.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {files.map((file, index) => (
-            <FileListItem key={`${file.name}-${file.size}`} file={file} onRemove={() => handleFileRemove(index)} disabled={disabled}/>
+            <FileListItem key={`${file.name}-${file.size}-${file.lastModified}`} file={file} onRemove={() => handleFileRemove(index)} disabled={disabled}/>
           ))}
         </div>
       )}
       <FileUpload 
         file={null} // Always in "add" mode
-        onFileChange={handleFileAdd}
-        title="Add files, or browse"
+        onFilesChange={handleFilesAdd}
+        title="Add file(s)"
         disabled={disabled}
+        multiple={true}
       />
     </div>
   );

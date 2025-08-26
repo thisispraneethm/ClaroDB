@@ -1,5 +1,4 @@
 
-import { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { TableSchema, ConversationTurn, InsightGenerationResult, ChartGenerationWithMetadataResult, Join } from '../types';
 import { DataHandler } from '../services/handlers/base';
@@ -10,10 +9,11 @@ interface UseAnalysisProps {
     llmProvider: LLMProvider;
     conversation: ConversationTurn[];
     setConversation: React.Dispatch<React.SetStateAction<ConversationTurn[]>>;
+    history: { role: string, content: string }[];
+    setHistory: React.Dispatch<React.SetStateAction<{ role: string, content: string }[]>>;
 }
 
-export const useAnalysis = ({ handler, llmProvider, conversation, setConversation }: UseAnalysisProps) => {
-  const [history, setHistory] = useState<{ role: string, content: string }[]>([]);
+export const useAnalysis = ({ handler, llmProvider, conversation, setConversation, history, setHistory }: UseAnalysisProps) => {
 
   const askQuestion = async (currentQuestion: string, schemas: TableSchema, joins?: Join[]) => {
     if (!currentQuestion.trim()) return;
@@ -36,7 +36,10 @@ export const useAnalysis = ({ handler, llmProvider, conversation, setConversatio
         }
       }
 
-      const sqlResult = await llmProvider.generateSQL(currentQuestion, schemas, handler.getDialect(), history, previewData, joins);
+      // Fetch corrections to provide as learning examples
+      const corrections = await handler.getCorrections(5);
+
+      const sqlResult = await llmProvider.generateSQL(currentQuestion, schemas, handler.getDialect(), history, previewData, joins, corrections);
       setConversation(prev => prev.map(t => 
         t.id === turnId ? { ...t, state: 'sql_ready', sqlResult } : t
       ));
@@ -47,23 +50,31 @@ export const useAnalysis = ({ handler, llmProvider, conversation, setConversatio
     }
   };
   
-  const executeApprovedSql = async (turnId: string) => {
+  const executeApprovedSql = async (turnId: string, sqlToExecute: string) => {
     const turn = conversation.find(t => t.id === turnId);
     if (!turn || !turn.sqlResult) return;
+
+    const isCorrection = turn.sqlResult.sql.trim() !== sqlToExecute.trim();
 
     setConversation(prev => prev.map(t => 
       t.id === turnId ? { ...t, state: 'executing' } : t
     ));
 
     try {
-      const data = await handler.executeQuery(turn.sqlResult.sql);
+      const data = await handler.executeQuery(sqlToExecute);
       const analysisResult = { sqlResult: turn.sqlResult, data };
 
       setConversation(prev => prev.map(t => 
         t.id === turnId ? { ...t, state: 'complete', analysisResult } : t
       ));
+      
+      // If the user corrected the SQL, save the correction
+      if (isCorrection) {
+        await handler.addCorrection({ question: turn.question, sql: sqlToExecute });
+      }
 
-      setHistory(prev => [...prev, { role: 'user', content: turn.question }, { role: 'assistant', content: turn.sqlResult!.sql }]);
+      // Add the executed query (corrected or not) to the history
+      setHistory(prev => [...prev, { role: 'user', content: turn.question }, { role: 'assistant', content: sqlToExecute }]);
 
     } catch (e: any) {
       setConversation(prev => prev.map(t => 

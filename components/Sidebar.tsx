@@ -1,11 +1,10 @@
-
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Info, Sparkles, FileSearch, Combine, DatabaseZap } from 'lucide-react';
+import { Home, Sparkles, FileSearch, Combine, DatabaseZap } from 'lucide-react';
 import { NavItem } from '../types';
 
 const navItems: NavItem[] = [
-  { path: '/', name: 'About', icon: <Info size={20} /> },
+  { path: '/', name: 'Home', icon: <Home size={20} /> },
   { path: '/demo', name: 'Demo Workspace', icon: <Sparkles size={20} /> },
   { path: '/analyze', name: 'Analyze File', icon: <FileSearch size={20} /> },
   { path: '/engineer', name: 'Engineer & Join', icon: <Combine size={20} /> },

@@ -4,6 +4,10 @@ import { SQLGenerationResult, ChartGenerationResult, TableSchema, InsightGenerat
 import { LLMGenerationError } from '../../utils/exceptions';
 import { config } from '../../config';
 import { enhancePromptWithSchemaAwareness } from '../../utils/promptEnhancer';
+import { Correction } from "../handlers/base";
+
+// Safari-specific fix: Detect Safari to alter the request payload structure.
+const isSafari = typeof navigator !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
 export class GeminiProvider extends LLMProvider {
   private ai: GoogleGenAI;
@@ -21,13 +25,13 @@ export class GeminiProvider extends LLMProvider {
     return promptCost + completionCost;
   }
 
-  async generateSQL(prompt: string, schemas: TableSchema, dialect: string, history: { role: string, content: string }[], dataPreview?: Record<string, Record<string, any>[]>, joins?: Join[]): Promise<SQLGenerationResult> {
+  async generateSQL(prompt: string, schemas: TableSchema, dialect: string, history: { role: string, content: string }[], dataPreview?: Record<string, Record<string, any>[]>, joins?: Join[], corrections?: Correction[]): Promise<SQLGenerationResult> {
     const allColumns = Object.values(schemas).flat().map(col => col.name);
-    const corrections = enhancePromptWithSchemaAwareness(prompt, allColumns);
+    const typoCorrections = enhancePromptWithSchemaAwareness(prompt, allColumns);
     
     let correctionHint = "";
-    if (Object.keys(corrections).length > 0) {
-        const hints = Object.entries(corrections).map(([t, c]) => `'${t}'->'${c}'`).join(", ");
+    if (Object.keys(typoCorrections).length > 0) {
+        const hints = Object.entries(typoCorrections).map(([t, c]) => `'${t}'->'${c}'`).join(", ");
         correctionHint = `\nHINT: The user may have made typos. Apply these corrections: ${hints}.`;
     }
 
@@ -64,6 +68,21 @@ export class GeminiProvider extends LLMProvider {
         dialectSpecificInstruction = `- IMPORTANT: For the 'alasql' dialect, you MUST adhere to these critical rules:
   - Enclose any column or table name containing spaces or special characters in square brackets (e.g., \`SELECT [Customer Id] FROM [Order Details]\`).
   - **You MUST NOT use window functions**. Functions like \`LAG()\`, \`LEAD()\`, \`ROW_NUMBER()\`, \`RANK()\`, or any function that uses an \`OVER()\` clause are NOT supported. For complex calculations like year-over-year growth, you must use alternative methods such as self-joins.`;
+    }
+
+    let userCorrectionsStr = "";
+    if (corrections && corrections.length > 0) {
+      userCorrectionsStr = `
+---
+LEARNING FROM USER FEEDBACK:
+The user has provided corrections in the past. These represent the ground truth for how to query their data. Prioritize these patterns.
+${corrections.map((c, i) => `
+## Correction ${i + 1}
+User Question: "${c.question}"
+Correct SQL: ${c.sql}
+`).join('\n')}
+---
+`;
     }
 
     const fewShotExamples = `
@@ -122,28 +141,36 @@ Constraints:
 - Return at most 1000 rows unless the user specifies a different limit.
 ${dialectSpecificInstruction}
 ${joinInstruction}
+${userCorrectionsStr}
 ${fewShotExamples}
 Schema:
 ${schemasStr}
 ${previewStr}
 ${correctionHint}`;
 
+    const historyStr = history.map(h => {
+        return h.role === 'user' 
+            ? `PREVIOUS QUESTION: "${h.content}"`
+            : `PREVIOUS SQL:\n${h.content}`;
+    }).join('\n\n');
+
+    const currentQuestionStr = `--- Current Question ---\nBased on the conversation so far, generate a SQL query for this question: ${prompt}`;
+
+    // Safari-specific fix: Send content as an array of strings to avoid ReadableStream issue.
+    const contentsPayload = isSafari
+        ? [
+            systemPrompt,
+            ...(historyStr ? [`--- Conversation History ---\n${historyStr}`] : []),
+            currentQuestionStr
+          ]
+        : `${systemPrompt}\n\n${historyStr ? `--- Conversation History ---\n${historyStr}\n\n` : ''}${currentQuestionStr}`;
+
     try {
       const modelName = 'gemini-2.5-flash';
       
-      const geminiHistory = history.map(h => ({
-        role: h.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: h.content }]
-      }));
-
-      const contents = [...geminiHistory, { role: 'user', parts: [{ text: prompt }] }];
-      
       const response: GenerateContentResponse = await this.ai.models.generateContent({
         model: modelName,
-        contents: contents,
-        config: {
-            systemInstruction: systemPrompt,
-        }
+        contents: contentsPayload,
       });
       
       const sqlQuery = response.text.replace(/```sql/g, '').replace(/```/g, '').trim();
@@ -159,39 +186,38 @@ ${correctionHint}`;
         prompt_tokens: promptTokens,
         completion_tokens: completionTokens,
       };
-    } catch (e: any)      {
-      // Attempt to parse a nested error message if it's a JSON string
-      let errorMessage = e.message || 'An unknown error occurred.';
-      if (typeof e.message === 'string' && e.message.includes('Proxying failed')) {
-          try {
-              const errorObj = JSON.parse(e.message.substring(e.message.indexOf('{')));
-              errorMessage = `${errorObj.error}: ${errorObj.details}`;
-          } catch (_) {
-            // Keep original message if parsing fails
+    } catch (e: any) {
+      let errorMessage = "I couldn't generate SQL for that. Please try rephrasing your question in plain English.";
+      if (typeof e.message === 'string') {
+          if (e.message.includes('API key not valid')) {
+              errorMessage = 'The configured Gemini API key is invalid or missing. Please contact the administrator.';
+          } else if (e.message.toLowerCase().includes('quota')) {
+              errorMessage = 'The API usage limit has been reached. Please contact the administrator.';
           }
       }
-      throw new LLMGenerationError(`Gemini SQL generation failed: ${errorMessage}`);
+      throw new LLMGenerationError(errorMessage);
     }
   }
 
   async generateInsights(question: string, data: Record<string, any>[]): Promise<InsightGenerationResult> {
-    const dataPreview = JSON.stringify(data.slice(0, 50), null, 2); // Increased preview to 50 as per spec
-    const prompt = `Context: The user asked "${question}".
-Result sample (first 50 rows): 
-${dataPreview}`;
+    const dataPreview = JSON.stringify(data.slice(0, 50), null, 2);
     
-    try {
-      const modelName = 'gemini-2.5-flash';
-      const response = await this.ai.models.generateContent({
-        model: modelName,
-        contents: prompt,
-        config: {
-           systemInstruction: `You generate a crisp, factual summary of a query result for a business audience.
+    const systemInstruction = `You generate a crisp, factual summary of a query result for a business audience.
 - Explain the key pattern in 5 sentences or less.
 - Use column names and units; avoid speculation.
 - If the result might be truncated (e.g., has 50 rows), mention that the data is a sample.
-- Use markdown for formatting (e.g., lists, bold text).`
-        }
+- Use markdown for formatting (e.g., lists, bold text).`;
+    
+    const userPrompt = `Context: The user asked "${question}".\nResult sample (first 50 rows):\n${dataPreview}`;
+    
+    const contentsPayload = isSafari ? [systemInstruction, userPrompt] : `${systemInstruction}\n\n${userPrompt}`;
+
+    try {
+      const modelName = 'gemini-2.5-flash';
+
+      const response = await this.ai.models.generateContent({
+        model: modelName,
+        contents: contentsPayload,
       });
       
       const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
@@ -234,13 +260,16 @@ ${dataPreview}`;
 - For pie charts, 'nameKey' should be the label for slices and 'dataKey' the value. A good pie chart typically has a categorical 'nameKey' and a numeric 'dataKey'.
 - For other charts, 'nameKey' is the X-axis and 'dataKey' is the Y-axis.
 - The 'title' should be a concise and descriptive title for the chart.`;
+    
+    const userPrompt = "Generate the chart configuration JSON for the provided context.";
+
+    const contentsPayload = isSafari ? [systemPrompt, userPrompt] : `${systemPrompt}\n\n${userPrompt}`;
 
     try {
         const response = await this.ai.models.generateContent({
             model: modelName,
-            contents: "Generate the chart configuration JSON for the provided context.",
+            contents: contentsPayload,
             config: {
-                systemInstruction: systemPrompt,
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,

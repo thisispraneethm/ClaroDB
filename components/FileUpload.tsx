@@ -1,15 +1,15 @@
-
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { FileUp, X, File as FileIcon } from 'lucide-react';
 
 interface FileUploadProps {
   file: File | null;
-  onFileChange: (file: File | null) => void;
+  onFilesChange: (files: File[]) => void;
   title?: string;
   disabled?: boolean;
+  multiple?: boolean;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ file, onFileChange, title = "Upload File", disabled = false }) => {
+const FileUpload: React.FC<FileUploadProps> = ({ file, onFilesChange, title = "Upload File", disabled = false, multiple = false }) => {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleDragEnter = (e: React.DragEvent<HTMLLabelElement>) => {
@@ -38,19 +38,19 @@ const FileUpload: React.FC<FileUploadProps> = ({ file, onFileChange, title = "Up
     e.stopPropagation();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      onFileChange(e.dataTransfer.files[0]);
+      onFilesChange(Array.from(e.dataTransfer.files));
       e.dataTransfer.clearData();
     }
   };
 
   const handleFileClear = () => {
     if (disabled) return;
-    onFileChange(null);
+    onFilesChange([]);
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled) return;
-    onFileChange(e.target.files?.[0] || null);
+    onFilesChange(e.target.files ? Array.from(e.target.files) : []);
     // Reset input value to allow re-uploading the same file
     e.target.value = '';
   }
@@ -85,7 +85,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ file, onFileChange, title = "Up
       <div className="relative z-10 flex items-center space-x-2">
         <FileUp className="text-text-secondary" />
         <span className="font-medium text-text-secondary">
-          {title}: Drop file here, or<span className="text-primary font-semibold">&nbsp;browse</span>
+          {title}: Drop file{multiple ? 's' : ''} here, or<span className="text-primary font-semibold">&nbsp;browse</span>
         </span>
       </div>
       <p className="relative z-10 text-xs text-text-secondary mt-1">Supports CSV, JSON, and TXT</p>
@@ -95,6 +95,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ file, onFileChange, title = "Up
         onChange={handleFileSelect}
         className="hidden"
         disabled={disabled}
+        multiple={multiple}
       />
     </label>
   );

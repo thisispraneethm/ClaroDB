@@ -1,9 +1,8 @@
-import { DataHandler } from './base';
-import { TableSchema, ColumnSchema } from '../../types';
+import { DataHandler, Correction } from './base';
+import { TableSchema } from '../../types';
 import { DataProcessingError, QueryExecutionError } from '../../utils/exceptions';
 // @ts-ignore
 import alasql from 'alasql';
-import { v4 as uuidv4 } from 'uuid';
 import { IndexedDBManager } from '../db/indexedDBManager';
 
 const demoSalesData = [
@@ -22,23 +21,28 @@ const demoSalesData = [
 ];
 
 const DEMO_TABLE_NAME = 'sales_data';
+const CORRECTIONS_STORE_NAME = 'corrections';
+const DEMO_DB_NAME = 'clarodb_demo_stable'; // Use a static name to prevent DB leaks
 
 export class DemoDataHandler extends DataHandler {
     private dbManager: IndexedDBManager | null = null;
-    private dbName: string;
 
     constructor() {
         super();
-        this.dbName = `clarodb_demo_${uuidv4().replace(/-/g, '')}`;
     }
 
     async connect(): Promise<void> {
         if (this.dbManager) return;
 
         try {
-            this.dbManager = new IndexedDBManager(this.dbName);
-            await this.dbManager.open([DEMO_TABLE_NAME]);
-            await this.dbManager.addData(DEMO_TABLE_NAME, demoSalesData);
+            this.dbManager = new IndexedDBManager(DEMO_DB_NAME);
+            await this.dbManager.open([DEMO_TABLE_NAME, CORRECTIONS_STORE_NAME]);
+            
+            // Only add data if the store is empty to prevent re-writes on every load
+            const existingData = await this.dbManager.getPreview(DEMO_TABLE_NAME, 1);
+            if (existingData.length === 0) {
+              await this.dbManager.addData(DEMO_TABLE_NAME, demoSalesData);
+            }
         } catch (e: any) {
             throw new DataProcessingError(`Failed to initialize IndexedDB for demo: ${e.message}`);
         }
@@ -83,8 +87,7 @@ export class DemoDataHandler extends DataHandler {
         try {
             const tablesInQuery = this.parseTablesFromQuery(query);
             
-            // If the query doesn't reference any known tables (e.g., "SELECT 1"), run it directly.
-            if (!tablesInQuery.has(DEMO_TABLE_NAME)) {
+            if (!tablesInQuery.has(DEMO_TABLE_NAME) && tablesInQuery.size === 0) {
                 return alasql(query);
             }
 
@@ -92,14 +95,26 @@ export class DemoDataHandler extends DataHandler {
             const tempDb = new alasql.Database();
             const data = await this.dbManager.getData(DEMO_TABLE_NAME);
             
-            // Use the most reliable method to load data into the temporary AlaSQL instance.
             tempDb.exec(`CREATE TABLE ${DEMO_TABLE_NAME}`);
             (tempDb.tables[DEMO_TABLE_NAME] as any).data = data;
             
             return tempDb.exec(query);
 
         } catch (e: any) {
-            throw new QueryExecutionError(`Failed to execute query on demo data: ${e.message}`);
+            let friendlyMessage = e.message;
+            if (typeof friendlyMessage === 'string') {
+                if (friendlyMessage.toLowerCase().includes("table does not exist")) {
+                    const missingTable = friendlyMessage.match(/table does not exist\s*:\s*(\w+)/i);
+                    friendlyMessage = `I tried to query a table named '${missingTable ? missingTable[1] : 'unknown'}' which doesn't seem to exist. The only available table is 'sales_data'.`;
+                } else if (friendlyMessage.toLowerCase().includes("column does not exist")) {
+                    friendlyMessage = `I tried to use a column that doesn't exist. Please check the schema and try rephrasing your question.`;
+                } else if (friendlyMessage.toLowerCase().includes("syntax error")) {
+                    friendlyMessage = `I generated a query with invalid syntax. This may be a bug. Could you try asking in a different way?`;
+                }
+            } else {
+                friendlyMessage = "An unexpected error occurred while running the query.";
+            }
+            throw new QueryExecutionError(friendlyMessage);
         }
     }
 
@@ -120,5 +135,18 @@ export class DemoDataHandler extends DataHandler {
             await this.dbManager.deleteDatabase();
             this.dbManager = null;
         }
+    }
+
+    async addCorrection(correction: Correction): Promise<void> {
+        this.checkDbManager();
+        await this.dbManager.appendData(CORRECTIONS_STORE_NAME, correction);
+    }
+
+    async getCorrections(limit: number): Promise<Correction[]> {
+        this.checkDbManager();
+        // FIX: Cast the result from getData to Correction[] as we know the data shape for this store.
+        const allCorrections = await this.dbManager.getData(CORRECTIONS_STORE_NAME) as Correction[];
+        // Return the most recent 'limit' corrections
+        return allCorrections.slice(-limit);
     }
 }

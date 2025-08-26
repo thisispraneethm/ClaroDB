@@ -1,3 +1,4 @@
+
 export class ClaroDBException extends Error {
   constructor(message: string) {
     super(message);

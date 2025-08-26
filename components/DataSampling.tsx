@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { TableSchema } from '../types';
-import { SlidersHorizontal, Check } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 import Container from './Container';
 
 interface DataSamplingProps {

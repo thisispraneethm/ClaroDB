@@ -1,3 +1,4 @@
+
 import { ReactNode } from "react";
 
 export interface ColumnSchema {
@@ -68,13 +69,6 @@ export interface ConversationTurn {
     error?: string;
 }
 
-export interface DataProfile {
-  column: string;
-  type: string;
-  filled: number;
-  missing: string;
-}
-
 export interface Join {
   id: string;
   table1: string;
@@ -82,4 +76,9 @@ export interface Join {
   table2: string;
   column2: string;
   joinType: 'inner' | 'left' | 'right' | 'outer';
+}
+
+export interface Point {
+  x: number;
+  y: number;
 }
