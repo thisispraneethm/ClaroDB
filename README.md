@@ -8,8 +8,9 @@ ClaroDB is an intelligent, browser-based data workspace designed to democratize 
 *   **💬 Conversational SQL**: Ask questions in plain English. ClaroDB uses the Google Gemini API to translate your queries into precise SQL, executes them, and provides answers in seconds.
 *   **🧠 Schema-Aware AI**: The AI automatically analyzes your data's structure to provide context-aware answers. It's smart enough to correct potential typos in your questions (e.g., "emplyee" -> "employee").
 *   **🔗 Versatile Connectivity**: 
-    *   **Analyze Single Files**: Upload a local CSV, JSON, or TXT file and start your analysis.
-    *   **Engineer & Join**: Upload multiple files, define relationships between them with a simple UI, and query the combined dataset.
+    *   **Analyze Single Files**: Upload a local CSV, JSON, or TXT file and start your analysis immediately.
+    *   **Engineer & Join**: Upload multiple files and model your data on an interactive canvas. Visually define relationships by dragging-and-dropping between columns and query your joined datasets as if they were a single table.
+    *   **Simulated Enterprise DB**: Experience a simulated connection to an enterprise-grade database. Explore schemas and run queries in a secure, sandboxed environment.
 *   **📊 Instant Insights & Visualizations**: Go beyond raw data. Generate AI-powered narrative summaries and dynamic charts (bar, line, pie) with a single click to see the story in your data.
 *   **⚙️ Data Sampling**: Work with massive files efficiently. For large datasets, you can apply random or stratified sampling to analyze a representative subset, improving performance and reducing costs.
 *   **🔒 100% Client-Side & Private**: Your privacy is paramount. All data loading, storage (via IndexedDB), and SQL execution happens locally in your browser. Your raw data is **never** sent to an external server.
@@ -18,11 +19,11 @@ ClaroDB is an intelligent, browser-based data workspace designed to democratize 
 
 The application is divided into several focused workspaces:
 
-*   **About**: An overview of the application's features and technology.
+*   **About**: An overview of the application's features, privacy-first architecture, and technology.
 *   **Demo Workspace**: The perfect place to start. A sandbox environment pre-loaded with sample sales data to explore the app's full capabilities without needing your own files.
-*   **Analyze File**: The primary workspace for single-file analysis. Upload your data, review its profile, and start a conversation.
-*   **Engineer & Join**: A powerful workspace for data modeling. Upload multiple files, define join conditions between them, and query the combined result.
-*   **Enterprise DB**: A "Coming Soon" feature demonstrating how ClaroDB could securely connect to live enterprise databases.
+*   **Analyze File**: The primary workspace for single-file analysis. Upload your data, review its structure, and start a conversation.
+*   **Engineer & Join**: A powerful workspace for data modeling. Upload multiple files, define join conditions on a visual canvas, and query the combined result.
+*   **Enterprise DB**: A simulated workspace demonstrating how ClaroDB can connect to live enterprise databases. Explore a pre-defined schema, build joins, and run queries.
 
 ## 🛠️ Technology Stack
 
