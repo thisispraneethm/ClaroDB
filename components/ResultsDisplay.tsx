@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -18,10 +17,10 @@ const COLORS = ['#007aff', '#34c759', '#ff9500', '#ff3b30', '#5856d6', '#af52de'
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-card/80 backdrop-blur-sm p-2 border border-border rounded-md shadow-lg">
-        <p className="font-semibold text-sm text-text">{label}</p>
+      <div className="bg-card/90 backdrop-blur-md p-3 border border-border rounded-lg shadow-lg animate-scale-in">
+        <p className="font-semibold text-sm text-text mb-1">{label}</p>
         {payload.map((pld: any, index: number) => (
-            <p key={index} className="text-xs" style={{ color: pld.color }}>{`${pld.name}: ${pld.value}`}</p>
+            <p key={index} className="text-sm" style={{ color: pld.color }}>{`${pld.name}: ${pld.value}`}</p>
         ))}
       </div>
     );
@@ -61,8 +60,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
   const prevTurnRef = useRef<ConversationTurn | null>(null);
   
   useEffect(() => {
-    // This robust effect only switches tabs when a *new* piece of data is generated for the turn.
-    // It prevents conflicts with user actions and fixes the previous state management bugs.
     const prevTurn = prevTurnRef.current;
     
     const justGotData = !prevTurn?.analysisResult && !!turn.analysisResult;
@@ -77,12 +74,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
         setActiveTab('table');
     }
 
-    // Always reset pagination when the underlying data changes
     if (turn.analysisResult !== prevTurn?.analysisResult) {
         setCurrentPage(1);
     }
     
-    // Update the ref for the next render
     prevTurnRef.current = turn;
   }, [turn]);
 
@@ -112,8 +107,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
     const { chartType, dataKey, nameKey, title } = chartResult.chartConfig;
 
     return (
-      <div className="w-full bg-card rounded-lg border border-border">
-        <div className="px-4 py-2 border-b border-border">
+      <div className="w-full bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card">
+        <div className="px-4 py-2 border-b border-black/5">
           <MetadataDisplay
               label="Chart Generation"
               model={chartResult.model}
@@ -131,22 +126,22 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
                     return (
                       <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(216, 12%, 84%)" />
-                        <XAxis dataKey={nameKey} tick={{ fontSize: 12, fill: 'hsl(216, 8%, 45%)' }} />
-                        <YAxis tick={{ fontSize: 12, fill: 'hsl(216, 8%, 45%)' }} />
-                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(216, 12%, 92%)' }}/>
+                        <XAxis dataKey={nameKey} tick={{ fontSize: 12, fill: '#5A6474' }} />
+                        <YAxis tick={{ fontSize: 12, fill: '#5A6474' }} />
+                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }}/>
                         <Legend />
-                        <Bar dataKey={dataKey} fill="#007AFF" />
+                        <Bar dataKey={dataKey} fill="#007AFF" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     );
                   case 'line':
                     return (
                       <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(216, 12%, 84%)" />
-                          <XAxis dataKey={nameKey} tick={{ fontSize: 12, fill: 'hsl(216, 8%, 45%)' }} />
-                          <YAxis tick={{ fontSize: 12, fill: 'hsl(216, 8%, 45%)' }} />
+                          <XAxis dataKey={nameKey} tick={{ fontSize: 12, fill: '#5A6474' }} />
+                          <YAxis tick={{ fontSize: 12, fill: '#5A6474' }} />
                           <Tooltip content={<CustomTooltip />} />
                           <Legend />
-                          <Line type="monotone" dataKey={dataKey} stroke="#007AFF" strokeWidth={2} />
+                          <Line type="monotone" dataKey={dataKey} stroke="#007AFF" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                       </LineChart>
                     );
                   case 'pie':
@@ -183,28 +178,28 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
     switch(activeTab) {
       case 'table':
         return data.length > 0 ? (
-           <div className="overflow-x-auto border border-border rounded-lg bg-card">
+           <div className="overflow-x-auto border border-border rounded-lg bg-card/80 backdrop-blur-xl shadow-card">
               <table className="w-full text-sm text-left">
-                  <thead className="bg-secondary-background">
+                  <thead className="bg-white/30">
                       <tr>
                           {headers.map(h => <th key={h} className="px-4 py-3 font-semibold text-text">{h}</th>)}
                       </tr>
                   </thead>
                   <tbody>
                       {paginatedData.map((row, i) => (
-                          <tr key={i} className="border-t border-border">
-                              {headers.map(h => <td key={h} className="px-4 py-2 text-text-secondary truncate max-w-xs">{String(row[h])}</td>)}
+                          <tr key={i} className="border-t border-black/5 even:bg-white/20">
+                              {headers.map(h => <td key={h} className="px-4 py-3 text-text-secondary truncate max-w-xs">{String(row[h])}</td>)}
                           </tr>
                       ))}
                   </tbody>
               </table>
                {totalPages > 1 && (
-                  <div className="flex justify-between items-center p-2 border-t border-border text-xs text-text-secondary">
-                      <button onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1} className="px-2 py-1 rounded disabled:opacity-50 hover:bg-black/5 flex items-center">
+                  <div className="flex justify-between items-center p-2 border-t border-black/5 text-xs text-text-secondary">
+                      <button onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1} className="px-2 py-1 rounded-md disabled:opacity-50 hover:bg-black/5 flex items-center transition-colors">
                         <ChevronLeft size={14} className="mr-1" /> Prev
                       </button>
                       <span>Page {currentPage} of {totalPages}</span>
-                      <button onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages} className="px-2 py-1 rounded disabled:opacity-50 hover:bg-black/5 flex items-center">
+                      <button onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages} className="px-2 py-1 rounded-md disabled:opacity-50 hover:bg-black/5 flex items-center transition-colors">
                         Next <ChevronRight size={14} className="ml-1" />
                       </button>
                   </div>
@@ -218,9 +213,9 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
             return <div className="text-center py-8 text-text-secondary flex items-center justify-center"><Loader2 size={20} className="animate-spin mr-2" /> Generating insights...</div>;
         }
         return (
-            <div className="bg-card rounded-lg border border-border">
+            <div className="bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card">
                 {insightsResult && (
-                  <div className="px-4 py-2 border-b border-border">
+                  <div className="px-4 py-2 border-b border-black/5">
                     <MetadataDisplay
                         label="Insight Generation"
                         model={insightsResult.model}
@@ -230,7 +225,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
                     />
                   </div>
                 )}
-                <div className="prose prose-sm max-w-none p-4 text-text">
+                <div className="prose prose-sm max-w-none p-6 text-text prose-headings:text-text prose-strong:text-text">
                     <ReactMarkdown>{insightsResult?.insights || ''}</ReactMarkdown>
                 </div>
             </div>
@@ -255,8 +250,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
             />
         </div>
       )}
-      <div className="border-b border-border flex items-center justify-between">
-          <div className="flex space-x-1">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex space-x-1 p-1 bg-secondary-background rounded-full border border-border">
             <TabButton icon={<Table size={16} />} label="Table" isActive={activeTab === 'table'} onClick={() => setActiveTab('table')} />
             <TabButton icon={<Lightbulb size={16} />} label="Insights" isActive={activeTab === 'insights'} onClick={() => setActiveTab('insights')} />
             <TabButton icon={<BarChart2 size={16} />} label="Chart" isActive={activeTab === 'chart'} onClick={() => setActiveTab('chart')} />
@@ -276,7 +271,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
             )}
           </div>
       </div>
-      <div>{renderContent()}</div>
+      <div className="animate-fade-in-up">{renderContent()}</div>
     </div>
   );
 };
@@ -294,15 +289,14 @@ const TabButton: React.FC<TabButtonProps> = ({ icon, label, isActive, onClick, d
         <button
             onClick={onClick}
             disabled={disabled}
-            className={`flex items-center px-4 py-2 text-sm font-medium rounded-t-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed relative ${
+            className={`flex items-center px-4 py-1.5 text-sm font-medium rounded-full transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed ${
                 isActive 
-                ? 'text-primary' 
-                : 'text-text-secondary hover:text-text'
+                ? 'text-primary-foreground bg-primary shadow-sm' 
+                : 'text-text-secondary hover:text-text hover:bg-black/5'
             }`}
         >
             {icon}
             <span className="ml-2">{label}</span>
-            {isActive && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"></div>}
         </button>
     )
 }

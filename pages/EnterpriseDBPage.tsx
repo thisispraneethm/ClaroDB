@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Container from '../components/Container';
 import { TableSchema, Join, Point } from '../types';
-import { Loader2, Bot, X, Layers, MousePointer2, DatabaseZap, CheckCircle } from 'lucide-react';
+import { Loader2, Bot, X, Layers, MousePointer2, DatabaseZap, CheckCircle, User } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAnalysis } from '../hooks/useAnalysis';
 import ChatInput from '../components/ChatInput';
@@ -36,24 +36,18 @@ const EnterpriseDBPage: React.FC = () => {
   const [joinTarget, setJoinTarget] = useState<{table: string, column: string} | null>(null);
   const [drawingLine, setDrawingLine] = useState<{start: Point, end: Point} | null>(null);
   const [modalState, setModalState] = useState<{isOpen: boolean, details: Omit<Join, 'id' | 'joinType'> | null}>({isOpen: false, details: null});
-  const [sidebarWidth, setSidebarWidth] = useState((window.innerWidth - 256) * 0.5);
+  const [sidebarWidth, setSidebarWidth] = useState(450);
   const isResizingRef = useRef(false);
   const [hoveredJoin, setHoveredJoin] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Refs to hold the latest state for event listeners, preventing stale closures.
   const joinSourceRef = useRef(joinSource);
   const joinTargetRef = useRef(joinTarget);
 
-  useEffect(() => {
-    joinSourceRef.current = joinSource;
-  }, [joinSource]);
-
-  useEffect(() => {
-    joinTargetRef.current = joinTarget;
-  }, [joinTarget]);
+  useEffect(() => { joinSourceRef.current = joinSource; }, [joinSource]);
+  useEffect(() => { joinTargetRef.current = joinTarget; }, [joinTarget]);
 
   const {
     askQuestion,
@@ -71,7 +65,6 @@ const EnterpriseDBPage: React.FC = () => {
   });
 
   const compatibleTargets = useMemo(() => {
-    // FIX: Explicitly type new Set() to avoid it being inferred as Set<unknown>.
     if (!joinSource) return new Set<string>();
     const targets = new Set<string>();
     if (schemas) {
@@ -86,14 +79,12 @@ const EnterpriseDBPage: React.FC = () => {
     return targets;
   }, [joinSource, schemas]);
 
-  const handleResizeMouseMove = useCallback((e: MouseEvent) => {
+ const handleResizeMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizingRef.current) return;
     const newWidth = window.innerWidth - e.clientX;
-    const minWidth = 320;
-    const maxWidth = 800;
-    if (newWidth >= minWidth && newWidth <= maxWidth) {
-      setSidebarWidth(newWidth);
-    }
+    const minWidth = 350;
+    const maxWidth = (window.innerWidth - 256) * 0.7; // Max 70% of available space
+    setSidebarWidth(Math.max(minWidth, Math.min(newWidth, maxWidth)));
   }, []);
 
   const handleResizeMouseUp = useCallback(() => {
@@ -121,13 +112,14 @@ const EnterpriseDBPage: React.FC = () => {
   const handleConnect = async () => {
     setIsProcessing(true);
     try {
-        await handler.connect(); // Simulate connection
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network latency
+        await handler.connect();
         const s = await handler.getSchemas();
         setSchemas(s);
 
         const initialPositions: Record<string, Point> = {};
         Object.keys(s).forEach((tableName, i) => {
-            initialPositions[tableName] = { x: (i % 4) * 320 + 50, y: Math.floor(i / 4) * 280 + 50 };
+            initialPositions[tableName] = { x: (i % 3) * 340 + 60, y: Math.floor(i / 3) * 320 + 60 };
         });
         setCardPositions(initialPositions);
         
@@ -144,8 +136,6 @@ const EnterpriseDBPage: React.FC = () => {
     }
   };
 
-    // These mouse handlers are defined using useCallback with empty dependency arrays.
-    // They read from refs to get the latest state, avoiding stale closure issues.
     const handleMouseMove = useCallback((e: MouseEvent) => {
         if (!joinSourceRef.current || !canvasRef.current) return;
         const canvasRect = canvasRef.current.getBoundingClientRect();
@@ -162,7 +152,7 @@ const EnterpriseDBPage: React.FC = () => {
             y: e.clientY - canvasRect.top + canvasRef.current.scrollTop,
         };
         setDrawingLine({ start, end });
-    }, []); // Stable function
+    }, []);
 
     const handleMouseUp = useCallback(() => {
         if (joinTargetRef.current && joinSourceRef.current) {
@@ -182,7 +172,7 @@ const EnterpriseDBPage: React.FC = () => {
         setDrawingLine(null);
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
-    }, []); // Stable function
+    }, []);
 
     const handleColumnMouseDown = useCallback((table: string, column: string) => {
         setJoinSource({ table, column });
@@ -204,10 +194,10 @@ const EnterpriseDBPage: React.FC = () => {
         if (!schemas) return;
         const newPositions: Record<string, Point> = {};
         const tableNames = Object.keys(schemas);
-        const numTables = tableNames.length;
-        const cols = Math.min(4, Math.ceil(Math.sqrt(numTables)));
+        const canvasWidth = canvasRef.current?.clientWidth || 800;
+        const cols = Math.min(4, Math.floor(canvasWidth / 340));
         const cardWidth = 300;
-        const cardHeight = 280;
+        const cardHeight = 320;
         const padding = 40;
 
         tableNames.forEach((tableName, i) => {
@@ -240,16 +230,18 @@ const EnterpriseDBPage: React.FC = () => {
   const isChatDisabled = isProcessing || isAnalysisLoading || !canAskQuestion;
 
   if (!isConnected) {
-    const inputClasses = "w-full p-2 border border-input rounded-md focus:ring-2 focus:ring-ring focus:outline-none transition bg-card";
+    const inputClasses = "w-full p-2.5 border border-input rounded-md focus:ring-2 focus:ring-ring focus:outline-none transition bg-card";
     const labelClasses = "block text-sm font-medium text-text-secondary mb-1";
     return (
-      <div className="h-full overflow-y-auto p-6 md:p-8 lg:p-10 flex items-center justify-center">
+      <div className="h-full overflow-y-auto p-6 md:p-8 lg:p-10 flex items-center justify-center animate-fade-in-up">
         <div className="max-w-md w-full">
             <Container>
                 <div className="text-center mb-6">
-                    <DatabaseZap className="mx-auto text-primary" size={32} />
-                    <h1 className="text-xl font-bold text-text mt-2">Connect to Database</h1>
-                    <p className="text-text-secondary text-sm">This is a simulated connection for demonstration.</p>
+                    <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center mx-auto mb-4">
+                        <DatabaseZap size={24} />
+                    </div>
+                    <h1 className="text-xl font-bold text-text">Connect to Database</h1>
+                    <p className="text-text-secondary text-sm">This is a simulated connection for demonstration purposes.</p>
                 </div>
                 <div className="space-y-4">
                     <div>
@@ -265,7 +257,7 @@ const EnterpriseDBPage: React.FC = () => {
                     <button
                         onClick={handleConnect}
                         disabled={isProcessing}
-                        className="w-full px-5 py-2.5 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary-hover disabled:opacity-50 flex items-center justify-center transition-colors"
+                        className="w-full px-5 py-2.5 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary-hover disabled:opacity-50 flex items-center justify-center transition-all duration-200 hover:scale-105"
                     >
                         {isProcessing ? <Loader2 className="animate-spin mr-2" /> : <DatabaseZap className="mr-2" size={16} />}
                         Connect to Demo Database
@@ -278,10 +270,61 @@ const EnterpriseDBPage: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-secondary-background overflow-hidden">
-      <div className="flex-1 flex overflow-hidden">
+    <div className="flex flex-col h-full bg-transparent overflow-hidden">
+      <div className="flex-1 flex flex-col-reverse md:flex-row overflow-hidden">
+        <aside 
+            style={{ width: `${sidebarWidth}px` }}
+            className="bg-card/80 backdrop-blur-xl border-t md:border-t-0 md:border-r border-white/20 flex flex-col flex-shrink-0 h-2/5 md:h-full"
+        >
+             <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+                <Container title="1. Connection Status">
+                   <div className="flex items-center text-success bg-success/10 p-3 rounded-lg border border-success/20">
+                        <CheckCircle size={20} className="mr-3 flex-shrink-0" />
+                        <div>
+                            <h4 className="font-semibold">Connected</h4>
+                            <p className="text-sm">sales_db @ demo-rds.clarodb.com</p>
+                        </div>
+                   </div>
+                </Container>
+
+                {schemas && Object.keys(schemas).length > 1 && (
+                    <Container title="2. Active Joins">
+                        {joins.length > 0 ? (
+                           <div className="space-y-2">
+                            {joins.map(join => (
+                              <div 
+                                key={join.id} 
+                                className="flex items-center justify-between p-2 bg-secondary-background rounded-md border border-border text-xs transition-all"
+                                onMouseEnter={() => setHoveredJoin(join.id)}
+                                onMouseLeave={() => setHoveredJoin(null)}
+                              >
+                                <div className="flex items-center gap-1.5 text-text-secondary flex-wrap">
+                                  <span className="font-semibold text-text truncate" title={join.table1}>{join.table1}</span>.<span className="font-mono">{join.column1}</span>
+                                  <span className="font-bold text-primary">{`(${join.joinType.charAt(0).toUpperCase()})`}</span>
+                                  <span className="font-semibold text-text truncate" title={join.table2}>{join.table2}</span>.<span className="font-mono">{join.column2}</span>
+                                </div>
+                                <button onClick={() => handleRemoveJoin(join.id)} className="p-1 text-text-secondary hover:text-danger rounded-full ml-2 flex-shrink-0"><X size={14} /></button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                            <div className="flex items-center text-sm text-text-secondary p-2 bg-secondary-background rounded-md">
+                                <MousePointer2 size={16} className="mr-2 flex-shrink-0" />
+                                <p>Drag between columns on the canvas to create a join.</p>
+                            </div>
+                        )}
+                    </Container>
+                )}
+             </div>
+        </aside>
+
+        <div 
+          onMouseDown={handleResizeMouseDown}
+          className="w-full h-1.5 md:w-1.5 md:h-full cursor-row-resize md:cursor-col-resize bg-border hover:bg-primary/50 active:bg-primary transition-colors flex-shrink-0"
+        />
+
         <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-4 border-b border-border bg-background/80 backdrop-blur-sm z-10">
+             <div className="p-4 border-b border-border bg-background/80 backdrop-blur-sm z-10 hidden md:block">
                 <h1 className="text-xl font-bold text-text">Database Modeling Canvas</h1>
                 <p className="text-sm text-text-secondary">Drag cards to arrange your schema and drag between columns to create joins.</p>
             </div>
@@ -314,90 +357,21 @@ const EnterpriseDBPage: React.FC = () => {
               )}
             </div>
         </div>
-        
-        <div 
-          onMouseDown={handleResizeMouseDown}
-          className="w-1.5 cursor-col-resize bg-border hover:bg-primary/50 active:bg-primary transition-colors flex-shrink-0"
-        />
-        
-        <aside 
-            ref={chatContainerRef}
-            style={{ width: `${sidebarWidth}px` }}
-            className="bg-background border-l border-border flex flex-col overflow-y-auto flex-shrink-0"
-        >
-             <div className="flex-1 p-4 space-y-4">
-                <Container title="1. Connection Status">
-                   <div className="flex items-center text-success bg-success/10 p-3 rounded-lg border border-success/20">
-                        <CheckCircle size={20} className="mr-3 flex-shrink-0" />
-                        <div>
-                            <h4 className="font-semibold">Connected</h4>
-                            <p className="text-sm">sales_db @ demo-rds.clarodb.com</p>
-                        </div>
-                   </div>
-                </Container>
-
-                {schemas && Object.keys(schemas).length > 0 && (
-                  <>
-                    <Container title="2. Active Joins">
-                        {joins.length > 0 ? (
-                           <div className="space-y-2">
-                            {joins.map(join => (
-                              <div 
-                                key={join.id} 
-                                className="flex items-center justify-between p-2 bg-secondary-background rounded-md border border-border text-xs transition-all"
-                                onMouseEnter={() => setHoveredJoin(join.id)}
-                                onMouseLeave={() => setHoveredJoin(null)}
-                              >
-                                <div className="flex items-center gap-1.5 text-text-secondary flex-wrap">
-                                  <span className="font-semibold text-text truncate" title={join.table1}>{join.table1}</span>.<span className="font-mono">{join.column1}</span>
-                                  <span className="font-bold text-primary">{`(${join.joinType.charAt(0).toUpperCase()})`}</span>
-                                  <span className="font-semibold text-text truncate" title={join.table2}>{join.table2}</span>.<span className="font-mono">{join.column2}</span>
-                                </div>
-                                <button onClick={() => handleRemoveJoin(join.id)} className="p-1 text-text-secondary hover:text-danger rounded-full ml-2 flex-shrink-0"><X size={14} /></button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                            <div className="flex items-center text-sm text-text-secondary p-2 bg-secondary-background rounded-md">
-                                <MousePointer2 size={16} className="mr-2 flex-shrink-0" />
-                                <p>Drag between columns on the canvas to create a join.</p>
-                            </div>
-                        )}
-                    </Container>
-
-                    <Container title="3. Data Previews">
-                         <div className="space-y-4">
-                            {Object.entries(schemas).map(([tableName]) => (
-                              <div key={tableName}>
-                                <h4 className="font-semibold mb-2 text-text truncate" title={tableName}>{tableName}</h4>
-                                <DataPreview data={previewData[tableName] || []} />
-                              </div>
-                            ))}
-                          </div>
-                    </Container>
-                  </>
-                )}
-             </div>
-
-            {enterpriseConversation.length > 0 && (
-                <div className="flex-1 p-4 space-y-8 border-t border-border">
-                {enterpriseConversation.map((turn) => (
-                    <React.Fragment key={turn.id}>
-                    <div className="flex justify-end"><div className="bg-primary text-primary-foreground rounded-lg p-3 max-w-3xl shadow-card"><p>{turn.question}</p></div></div>
-                    <div className="flex items-start space-x-4">
-                        <div className="bg-card p-2 rounded-full flex-shrink-0 border border-border"><Bot size={20} className="text-primary" /></div>
-                        <div className="flex-1 min-w-0">
-                            <ConversationTurnDisplay turn={turn} onExecute={executeApprovedSql} onGenerateInsights={generateInsightsForTurn} onGenerateChart={generateChartForTurn} />
-                        </div>
-                    </div>
-                    </React.Fragment>
-                ))}
-                </div>
-            )}
-        </aside>
       </div>
 
       <div className="flex-shrink-0 border-t border-border">
+         {enterpriseConversation.length > 0 ? (
+             <div ref={chatContainerRef} className="h-96 overflow-y-auto p-4 sm:p-6 lg:p-10 bg-secondary-background/50">
+                 <div className="max-w-4xl mx-auto space-y-8">
+                    {enterpriseConversation.map((turn) => (
+                        <React.Fragment key={turn.id}>
+                          <div className="flex items-start justify-end group"><div className="bg-primary text-primary-foreground rounded-xl rounded-br-none p-4 max-w-2xl shadow-md"><p>{turn.question}</p></div><div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center ml-3 flex-shrink-0"><User size={20} /></div></div>
+                          <div className="flex items-start group"><div className="w-10 h-10 rounded-full bg-secondary-background text-primary border border-border flex items-center justify-center mr-3 flex-shrink-0"><Bot size={20} /></div><div className="flex-1 min-w-0"><ConversationTurnDisplay turn={turn} onExecute={executeApprovedSql} onGenerateInsights={generateInsightsForTurn} onGenerateChart={generateChartForTurn} /></div></div>
+                        </React.Fragment>
+                    ))}
+                 </div>
+             </div>
+        ) : null}
         <ChatInput value={question} onChange={setQuestion} onSend={handleSend} isLoading={isAnalysisLoading} placeholder={getPlaceholder()} disabled={isChatDisabled}/>
       </div>
       

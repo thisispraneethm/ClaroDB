@@ -43,16 +43,17 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
       setLinePositions(newPositions);
     };
 
-    calculatePositions();
+    const animationFrameId = requestAnimationFrame(calculatePositions);
 
     const canvasEl = document.querySelector('div[class*="overflow-auto"]');
     if (canvasEl) {
       const observer = new MutationObserver(calculatePositions);
-      observer.observe(canvasEl, { attributes: true, childList: true, subtree: true });
+      observer.observe(canvasEl, { attributes: true, childList: true, subtree: true, characterData: true });
       window.addEventListener('resize', calculatePositions);
       canvasEl.addEventListener('scroll', calculatePositions);
 
       return () => {
+        cancelAnimationFrame(animationFrameId);
         observer.disconnect();
         window.removeEventListener('resize', calculatePositions);
         canvasEl.removeEventListener('scroll', calculatePositions);
@@ -64,7 +65,7 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
     <svg className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>
       <defs>
         <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="3.5" result="coloredBlur" />
+          <feGaussianBlur stdDeviation="4" result="coloredBlur" />
           <feMerge>
             <feMergeNode in="coloredBlur" />
             <feMergeNode in="SourceGraphic" />
@@ -74,16 +75,17 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
       
       {linePositions.map(({ id, p1, p2 }) => {
         const isHovered = id === hoveredJoinId;
+        const dx = Math.abs(p2.x - p1.x) * 0.4;
         return (
           <g key={id} style={{ filter: isHovered ? 'url(#glow)' : 'none', transition: 'filter 0.2s ease-in-out' }}>
             <path
-              d={`M ${p1.x} ${p1.y} C ${p1.x + 50} ${p1.y}, ${p2.x - 50} ${p2.y}, ${p2.x} ${p2.y}`}
+              d={`M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}`}
               stroke="#007AFF"
-              strokeWidth={isHovered ? "4" : "2.5"}
+              strokeWidth={isHovered ? "3" : "2"}
               fill="none"
               className="animate-fade-in-line"
               style={{
-                strokeOpacity: isHovered ? 1 : 0.7,
+                strokeOpacity: isHovered ? 1 : 0.8,
                 transition: 'stroke-width 0.2s ease-in-out, stroke-opacity 0.2s ease-in-out'
               }}
             />
@@ -93,10 +95,10 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
       
       {drawingLine && (
         <path
-          d={`M ${drawingLine.start.x} ${drawingLine.start.y} C ${drawingLine.start.x + 20} ${drawingLine.start.y}, ${drawingLine.end.x - 20} ${drawingLine.end.y}, ${drawingLine.end.x} ${drawingLine.end.y}`}
+          d={`M ${drawingLine.start.x} ${drawingLine.start.y} C ${drawingLine.start.x + 40} ${drawingLine.start.y}, ${drawingLine.end.x - 40} ${drawingLine.end.y}, ${drawingLine.end.x} ${drawingLine.end.y}`}
           stroke="#5856d6"
           strokeWidth="2"
-          strokeDasharray="5 5"
+          strokeDasharray="6 6"
           fill="none"
         />
       )}

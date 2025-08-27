@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ConversationTurn } from '../types';
 import { Loader2, AlertTriangle } from 'lucide-react';
@@ -22,9 +21,9 @@ const ConversationTurnDisplay: React.FC<ConversationTurnDisplayProps> = ({
     case 'sql_generating':
     case 'executing':
       return (
-        <div className="flex items-center mt-2">
-          <Loader2 className="animate-spin text-primary" size={24} />
-          <span className="ml-3 text-text-secondary">
+        <div className="flex items-center p-4 bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card">
+          <Loader2 className="animate-spin text-primary" size={20} />
+          <span className="ml-3 text-text-secondary text-sm font-medium">
             {turn.state === 'sql_generating' ? 'Generating SQL...' : 'Executing query...'}
           </span>
         </div>

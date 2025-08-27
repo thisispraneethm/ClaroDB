@@ -1,17 +1,17 @@
-
 import React from 'react';
 
 interface ContainerProps {
   title?: string;
   caption?: string;
   children: React.ReactNode;
+  className?: string;
 }
 
-const Container: React.FC<ContainerProps> = ({ title, caption, children }) => {
+const Container: React.FC<ContainerProps> = ({ title, caption, children, className = '' }) => {
   return (
-    <div className="bg-card/60 backdrop-blur-lg border border-white/40 rounded-xl shadow-card">
+    <div className={`bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card transition-shadow hover:shadow-card-hover ${className}`}>
        {(title || caption) && (
-        <div className="p-4 md:p-5 border-b border-border/50">
+        <div className="p-4 md:p-5 border-b border-black/5">
           {title && <h3 className="text-lg font-semibold text-text">{title}</h3>}
           {caption && <p className="text-sm text-text-secondary mt-1">{caption}</p>}
         </div>

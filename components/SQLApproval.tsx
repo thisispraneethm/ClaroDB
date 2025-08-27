@@ -1,11 +1,11 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { sql } from 'react-syntax-highlighter/dist/esm/languages/hljs';
-import { atomOneLight } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { github } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import { SQLGenerationResult } from '../types';
 import { Copy, Check, AlertTriangle, Pencil, BrainCircuit } from 'lucide-react';
 
+// FIX: Define the props interface for the component.
 interface SQLApprovalProps {
   sqlResult: SQLGenerationResult;
   onExecute: (sql: string) => void;
@@ -24,7 +24,6 @@ const SQLApproval: React.FC<SQLApprovalProps> = ({ sqlResult, onExecute }) => {
   useEffect(() => {
     if (isEditing && textAreaRef.current) {
         textAreaRef.current.focus();
-        // Auto-adjust height
         textAreaRef.current.style.height = 'inherit';
         textAreaRef.current.style.height = `${textAreaRef.current.scrollHeight}px`;
     }
@@ -40,9 +39,9 @@ const SQLApproval: React.FC<SQLApprovalProps> = ({ sqlResult, onExecute }) => {
   const totalTokens = (sqlResult.prompt_tokens || 0) + (sqlResult.completion_tokens || 0);
 
   return (
-    <div className="bg-card/70 backdrop-blur-lg border border-white/40 rounded-xl shadow-card overflow-hidden">
+    <div className="bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card overflow-hidden">
       <div className="p-4 md:p-6 space-y-4">
-        <div className="bg-background rounded-md border border-border">
+        <div className="bg-secondary-background/70 rounded-md border border-border overflow-hidden">
           <div className="px-4 py-2 flex justify-between items-center border-b border-border flex-wrap gap-2">
             <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold text-text">Generated SQL</h3>
@@ -68,7 +67,7 @@ const SQLApproval: React.FC<SQLApprovalProps> = ({ sqlResult, onExecute }) => {
                 rows={Math.max(5, editedSql.split('\n').length)}
               />
           ) : (
-            <SyntaxHighlighter language="sql" style={atomOneLight} customStyle={{ background: 'transparent', padding: '1rem', margin: 0, fontSize: '0.8rem' }} wrapLines={true}>
+            <SyntaxHighlighter language="sql" style={github} customStyle={{ background: 'transparent', padding: '1rem', margin: 0, fontSize: '0.8rem' }} wrapLines={true}>
               {editedSql}
             </SyntaxHighlighter>
           )}
@@ -90,7 +89,7 @@ const SQLApproval: React.FC<SQLApprovalProps> = ({ sqlResult, onExecute }) => {
             </div>
         </div>
       </div>
-      <div className="p-4 bg-background/50 border-t border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className="p-4 bg-secondary-background/50 border-t border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
          <div className="text-right text-xs text-text-secondary space-x-3 flex items-center">
               <span>Model: <b className="text-text">{sqlResult.model}</b></span>
               <span>Tokens: <b className="text-text">{totalTokens.toLocaleString()}</b></span>
@@ -98,7 +97,7 @@ const SQLApproval: React.FC<SQLApprovalProps> = ({ sqlResult, onExecute }) => {
         </div>
         <button
           onClick={() => onExecute(editedSql)}
-          className="px-5 py-2.5 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary-hover flex items-center justify-center transition-colors"
+          className="px-5 py-2 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary-hover flex items-center justify-center transition-all duration-200 hover:scale-105"
         >
           <Check size={16} className="mr-2" />
           {isCorrected ? 'Run Corrected Query' : 'Run Query'}

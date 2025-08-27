@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Container from '../components/Container';
 import FileUpload from '../components/FileUpload';
 import { TableSchema } from '../types';
-import { Loader2, AlertTriangle, Bot, Layers, FileUp } from 'lucide-react';
+import { Loader2, AlertTriangle, Bot, Layers, FileUp, User } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAnalysis } from '../hooks/useAnalysis';
 import ChatInput from '../components/ChatInput';
@@ -107,69 +107,52 @@ const AnalyzePage: React.FC = () => {
   };
   
   const renderContent = () => {
-    if (!file) {
+    if (!file && !isProcessingFile) {
       return (
-        <>
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-text">Analyze File</h1>
-            <p className="text-text-secondary">Upload a single CSV, JSON, or TXT file to begin your analysis.</p>
-          </div>
-          {isProcessingFile ? (
-            <div className="flex justify-center items-center py-10"><Loader2 className="animate-spin text-primary" size={24} /><span className="ml-2 text-text-secondary">Processing file...</span></div>
-          ) : pageError ? (
-             <div className="flex items-start text-danger bg-danger/10 p-4 rounded-lg border border-danger/20">
-              <AlertTriangle size={20} className="mr-3 flex-shrink-0 mt-0.5" />
-              <div>
-                <h4 className="font-semibold">File Processing Error</h4>
-                <p className="text-sm mt-1">{pageError}</p>
-              </div>
-            </div>
-          ) : (
-            <Container>
-              <EmptyState
-                icon={<FileUp size={24} className="text-primary" />}
-                title="Upload a file to get started"
-                description="Begin your analysis by providing a single CSV, JSON, or TXT file."
-              >
-                <div className="max-w-md mx-auto">
-                  <FileUpload file={file} onFilesChange={handleFileChange} disabled={isProcessingFile} />
+        <div className="flex flex-col items-center justify-center h-full text-center">
+            {pageError ? (
+                <div className="w-full max-w-lg">
+                    <Container>
+                        <div className="flex items-start text-danger bg-danger/10 p-4 rounded-lg border border-danger/20">
+                            <AlertTriangle size={20} className="mr-3 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <h4 className="font-semibold">File Processing Error</h4>
+                                <p className="text-sm mt-1">{pageError}</p>
+                            </div>
+                        </div>
+                    </Container>
                 </div>
-              </EmptyState>
-            </Container>
-          )}
-        </>
+            ) : (
+                <Container className="w-full max-w-lg">
+                    <EmptyState
+                        icon={<FileUp size={24} className="text-primary" />}
+                        title="Upload a file to get started"
+                        description="Begin your analysis by providing a single CSV, JSON, or TXT file."
+                    >
+                        <div className="max-w-md mx-auto">
+                        <FileUpload file={file} onFilesChange={handleFileChange} disabled={isProcessingFile} />
+                        </div>
+                    </EmptyState>
+                </Container>
+            )}
+        </div>
       );
     }
-
+    
     return (
-      <>
         <div className="space-y-6">
-            <div>
-              <h1 className="text-3xl font-bold text-text">Analyze File</h1>
-              <p className="text-text-secondary">Upload a single CSV, JSON, or TXT file to begin your analysis.</p>
-            </div>
             <Container title="1. Upload Data">
-              <FileUpload file={file} onFilesChange={handleFileChange} disabled={isProcessingFile} />
+                <FileUpload file={file} onFilesChange={handleFileChange} disabled={isProcessingFile || isAnalysisLoading} />
             </Container>
 
             {isProcessingFile && <div className="flex justify-center items-center"><Loader2 className="animate-spin text-primary" size={24} /><span className="ml-2 text-text-secondary">Processing file...</span></div>}
-            
-            {pageError && (
-              <div className="flex items-start text-danger bg-danger/10 p-4 rounded-lg border border-danger/20">
-                <AlertTriangle size={20} className="mr-3 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-semibold">File Processing Error</h4>
-                  <p className="text-sm mt-1">{pageError}</p>
-                </div>
-              </div>
-            )}
             
             {schemas && previewData && (
               <>
                 <DataSampling 
                   schemas={schemas}
                   onApplySampling={handleApplySampling}
-                  disabled={isProcessingFile}
+                  disabled={isProcessingFile || isAnalysisLoading}
                 />
                 {isSampled && (
                     <div className="flex items-center text-info-text bg-info-background p-3 rounded-lg border border-info-border">
@@ -180,15 +163,17 @@ const AnalyzePage: React.FC = () => {
                 <Container title="2. Review Data"><DataPreview data={previewData} /></Container>
               </>
             )}
-          </div>
           
           {analyzeConversation.length > 0 && (
             <div className="space-y-8 pt-6 border-t border-border">
               {analyzeConversation.map((turn) => (
                 <React.Fragment key={turn.id}>
-                  <div className="flex justify-end"><div className="bg-primary text-primary-foreground rounded-lg p-3 max-w-3xl shadow-card"><p>{turn.question}</p></div></div>
-                  <div className="flex items-start space-x-4">
-                    <div className="bg-card p-2 rounded-full flex-shrink-0 border border-border"><Bot size={20} className="text-primary" /></div>
+                  <div className="flex items-start justify-end group">
+                    <div className="bg-primary text-primary-foreground rounded-xl rounded-br-none p-4 max-w-2xl shadow-md"><p>{turn.question}</p></div>
+                    <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center ml-3 flex-shrink-0"><User size={20} /></div>
+                  </div>
+                  <div className="flex items-start group">
+                    <div className="w-10 h-10 rounded-full bg-secondary-background text-primary border border-border flex items-center justify-center mr-3 flex-shrink-0"><Bot size={20} /></div>
                     <div className="flex-1 min-w-0">
                         <ConversationTurnDisplay
                             turn={turn}
@@ -202,14 +187,18 @@ const AnalyzePage: React.FC = () => {
               ))}
             </div>
           )}
-      </>
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-secondary-background">
+    <div className="flex flex-col h-full bg-transparent">
+      <div className="p-4 sm:p-6 lg:p-10 border-b border-border bg-background/80 backdrop-blur-sm">
+        <h1 className="text-2xl font-bold text-text">Analyze File</h1>
+        <p className="text-text-secondary">Upload a single CSV, JSON, or TXT file to begin your analysis.</p>
+      </div>
       <div className="flex-1 overflow-y-auto" ref={chatContainerRef}>
-        <div className="p-6 md:p-8 lg:p-10 space-y-6 max-w-5xl mx-auto">
+        <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto">
           {renderContent()}
         </div>
       </div>

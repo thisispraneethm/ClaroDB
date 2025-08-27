@@ -26,7 +26,6 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer 
 
     if (isOpen) {
       document.addEventListener('keydown', handleEscape);
-      // Use mousedown event to prevent closing when user clicks inside modal and drags outside
       document.addEventListener('mousedown', handleClickOutside);
     }
 
@@ -39,19 +38,20 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div ref={modalRef} className="bg-card rounded-xl shadow-xl w-full max-w-lg border border-border/50 animate-fade-in-up">
-        <div className="flex items-center justify-between p-4 border-b border-border">
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in-up" style={{ animationName: 'fade-in' }}>
+      <style>{`@keyframes fade-in { 0% { opacity: 0; } 100% { opacity: 1; } }`}</style>
+      <div ref={modalRef} className="bg-card/80 backdrop-blur-2xl rounded-xl shadow-xl w-full max-w-lg border border-white/20 animate-scale-in">
+        <div className="flex items-center justify-between p-4 border-b border-black/5">
           <h2 className="text-lg font-semibold text-text flex items-center">{title}</h2>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-black/5">
-            <X size={20} className="text-text-secondary" />
+          <button onClick={onClose} className="p-1 rounded-full text-text-secondary hover:bg-black/5 transition-colors">
+            <X size={20} />
           </button>
         </div>
         <div className="p-6">
           {children}
         </div>
         {footer && (
-          <div className="flex justify-end p-4 bg-secondary-background/50 border-t border-border rounded-b-xl">
+          <div className="flex justify-end p-4 bg-secondary-background/50 border-t border-black/5 rounded-b-xl">
             {footer}
           </div>
         )}

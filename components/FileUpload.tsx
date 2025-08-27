@@ -28,7 +28,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ file, onFilesChange, title = "U
 
   const handleDragOver = (e: React.DragEvent<HTMLLabelElement>) => {
     if (disabled) return;
-    e.preventDefault(); // This is necessary to allow dropping
+    e.preventDefault();
     e.stopPropagation();
   };
 
@@ -51,14 +51,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ file, onFilesChange, title = "U
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled) return;
     onFilesChange(e.target.files ? Array.from(e.target.files) : []);
-    // Reset input value to allow re-uploading the same file
     e.target.value = '';
   }
 
   if (file) {
-    const fileSize = (file.size / 1024).toFixed(2); // in KB
+    const fileSize = (file.size / 1024).toFixed(2);
     return (
-      <div className="flex items-center justify-between p-3 bg-card/60 backdrop-blur-sm rounded-xl border border-border">
+      <div className="flex items-center justify-between p-3 bg-secondary-background rounded-lg border border-border">
         <div className="flex items-center overflow-hidden">
           <FileIcon className="text-primary mr-3 flex-shrink-0" />
           <div className="flex flex-col overflow-hidden">
@@ -79,16 +78,16 @@ const FileUpload: React.FC<FileUploadProps> = ({ file, onFilesChange, title = "U
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      className={`relative flex flex-col items-center justify-center w-full h-32 px-4 transition-colors duration-300 bg-card/50 border-2 border-border border-dashed rounded-xl appearance-none overflow-hidden ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-primary'} ${isDragging ? 'border-primary' : ''}`}
+      className={`relative flex flex-col items-center justify-center w-full h-36 px-4 transition-colors duration-300 bg-secondary-background/70 border-2 border-border border-dashed rounded-xl appearance-none overflow-hidden ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-primary'} ${isDragging ? 'border-primary bg-primary/10' : ''}`}
     >
       {isDragging && <div className="absolute inset-0 bg-primary/10 backdrop-blur-sm z-0"></div>}
-      <div className="relative z-10 flex items-center space-x-2">
-        <FileUp className="text-text-secondary" />
+      <div className="relative z-10 flex flex-col items-center text-center">
+        <FileUp className="text-text-secondary mb-2" />
         <span className="font-medium text-text-secondary">
           {title}: Drop file{multiple ? 's' : ''} here, or<span className="text-primary font-semibold">&nbsp;browse</span>
         </span>
+        <p className="text-xs text-text-secondary mt-1">Supports CSV, JSON, and TXT</p>
       </div>
-      <p className="relative z-10 text-xs text-text-secondary mt-1">Supports CSV, JSON, and TXT</p>
       <input
         type="file"
         accept=".csv,.json,.txt"

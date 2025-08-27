@@ -11,12 +11,12 @@ interface EmptyStateProps {
 
 const EmptyState: React.FC<EmptyStateProps> = ({ icon, title, description, children }) => {
   return (
-    <div className="text-center p-8">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+    <div className="text-center p-6 md:p-8">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
         {icon}
       </div>
       <h3 className="mt-4 text-lg font-semibold text-text">{title}</h3>
-      <p className="mt-1 text-sm text-text-secondary">{description}</p>
+      <p className="mt-1 text-sm text-text-secondary max-w-sm mx-auto">{description}</p>
       <div className="mt-6">{children}</div>
       <div className="mt-8 border-t border-border pt-6">
         <p className="text-sm text-text-secondary">Not sure where to start?</p>

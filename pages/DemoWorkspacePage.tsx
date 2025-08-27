@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TableSchema } from '../types';
-import { Loader2, Bot } from 'lucide-react';
+import { Loader2, User, Bot } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAnalysis } from '../hooks/useAnalysis';
 import ChatInput from '../components/ChatInput';
@@ -74,47 +74,51 @@ const DemoWorkspacePage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-secondary-background">
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6 md:p-8 lg:p-10 space-y-8">
-        {isLoadingSchema ? (
-            <div className="flex justify-center items-center h-full">
-                <Loader2 className="animate-spin text-primary" size={32} />
-                <span className="ml-4 text-text-secondary">Loading demo schema...</span>
-            </div>
-        ) : (
-            demoConversation.length === 0 && (
-                <WelcomeMessage
-                  title="🚀 Demo Workspace"
-                  description="This workspace is pre-loaded with a sample sales dataset. Ask a question or click an example to get started!"
-                  schemas={schemas}
-                  exampleQueries={exampleQueries}
-                />
-            )
-        )}
-        
-        {demoConversation.map((turn) => (
-          <React.Fragment key={turn.id}>
-            <div className="flex justify-end max-w-4xl mx-auto">
-              <div className="bg-primary text-primary-foreground rounded-lg p-3 max-w-2xl shadow-card">
-                <p>{turn.question}</p>
+    <div className="flex flex-col h-full bg-transparent">
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10">
+        <div className="max-w-4xl mx-auto space-y-8">
+          {isLoadingSchema ? (
+              <div className="flex justify-center items-center h-full">
+                  <Loader2 className="animate-spin text-primary" size={32} />
+                  <span className="ml-4 text-text-secondary">Loading demo workspace...</span>
               </div>
-            </div>
-            <div className="flex items-start space-x-4 max-w-4xl mx-auto">
-              <div className="bg-card p-2 rounded-full flex-shrink-0 border border-border">
-                <Bot size={20} className="text-primary" />
+          ) : (
+              demoConversation.length === 0 && (
+                  <WelcomeMessage
+                    title="🚀 Demo Workspace"
+                    description="This workspace is pre-loaded with a sample sales dataset. Ask a question or click an example to get started!"
+                    schemas={schemas}
+                    exampleQueries={exampleQueries}
+                  />
+              )
+          )}
+          
+          {demoConversation.map((turn) => (
+            <React.Fragment key={turn.id}>
+              <div className="flex items-start justify-end group animate-fade-in-up">
+                <div className="bg-primary text-primary-foreground rounded-xl rounded-br-none p-4 max-w-2xl shadow-md">
+                  <p>{turn.question}</p>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center ml-3 flex-shrink-0">
+                  <User size={20} />
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <ConversationTurnDisplay
-                    turn={turn}
-                    onExecute={executeApprovedSql}
-                    onGenerateInsights={generateInsightsForTurn}
-                    onGenerateChart={generateChartForTurn}
-                />
+              <div className="flex items-start group animate-fade-in-up">
+                <div className="w-10 h-10 rounded-full bg-secondary-background text-primary border border-border flex items-center justify-center mr-3 flex-shrink-0">
+                  <Bot size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <ConversationTurnDisplay
+                      turn={turn}
+                      onExecute={executeApprovedSql}
+                      onGenerateInsights={generateInsightsForTurn}
+                      onGenerateChart={generateChartForTurn}
+                  />
+                </div>
               </div>
-            </div>
-          </React.Fragment>
-        ))}
-
+            </React.Fragment>
+          ))}
+        </div>
       </div>
 
       <div className="flex-shrink-0">

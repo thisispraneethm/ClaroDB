@@ -39,7 +39,7 @@ const JoinCreationModal: React.FC<JoinCreationModalProps> = ({
   const modalFooter = (
     <>
       <button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-text-secondary hover:bg-black/5 rounded-md mr-2">Cancel</button>
-      <button onClick={handleSubmit} className="px-5 py-2.5 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary-hover text-sm">Confirm Join</button>
+      <button onClick={handleSubmit} className="px-5 py-2 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary-hover text-sm">Confirm Join</button>
     </>
   );
 

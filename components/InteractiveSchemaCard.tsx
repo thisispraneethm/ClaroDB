@@ -65,17 +65,17 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
 
   return (
     <div
-      className={`absolute bg-card/60 backdrop-blur-lg border border-white/40 rounded-xl shadow-lg w-72 flex flex-col transition-all duration-150 hover:shadow-xl hover:scale-[1.02]`}
+      className={`absolute bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-lg w-72 flex flex-col transition-all duration-200 hover:shadow-xl hover:scale-[1.02]`}
       style={{
         left: position.x,
         top: position.y,
         cursor: isDragging ? 'grabbing' : 'default',
         zIndex: isDragging ? 20 : 10,
-        boxShadow: activeJoinColumns.size > 0 ? '0 0 15px 5px rgba(0, 122, 255, 0.3)' : undefined
+        boxShadow: activeJoinColumns.size > 0 ? '0 0 20px 5px rgba(0, 122, 255, 0.25)' : undefined
       }}
     >
       <div
-        className="flex items-center gap-2 p-3 border-b border-white/20"
+        className="flex items-center gap-2 p-3 border-b border-black/5"
         onMouseDown={handleMouseDown}
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
       >
@@ -85,7 +85,7 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
           {displayName}
         </h3>
       </div>
-      <div className="space-y-1 p-2 flex-1 overflow-y-auto max-h-64">
+      <div className="space-y-1 p-2 flex-1 overflow-y-auto max-h-[220px]">
         {schema.map((col) => {
           const isCompatible = compatibleTargets.has(`${tableName}-${col.name}`);
           const isActiveJoin = activeJoinColumns.has(`${tableName}-${col.name}`);
@@ -95,7 +95,7 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
             <div
               key={col.name}
               id={`col-${tableName}-${col.name}`}
-              className={`flex justify-between items-center text-sm p-1.5 rounded-md transition-all duration-150 relative ${
+              className={`flex justify-between items-center text-sm p-1.5 rounded-md transition-all duration-150 relative group ${
                 isSourceCol ? 'bg-primary/20' : ''
               } ${
                 isActiveJoin ? 'bg-primary/20 font-semibold' : ''
@@ -108,8 +108,9 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
             >
               <div className="flex items-center gap-2 overflow-hidden">
                   <DataTypeIcon type={col.type} />
-                  <span className="text-text-secondary font-medium truncate pr-2">{col.name}</span>
+                  <span className="text-text font-medium truncate pr-2">{col.name}</span>
               </div>
+              <div className="w-2.5 h-2.5 bg-white border-2 border-primary/50 rounded-full right-2 absolute opacity-0 group-hover:opacity-100 transition-opacity"></div>
               {isCompatible && <div className="absolute inset-0 rounded-md animate-pulse-glow pointer-events-none"></div>}
             </div>
           );
