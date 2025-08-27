@@ -36,9 +36,6 @@ const EnterpriseDBPage: React.FC = () => {
   const [joinTarget, setJoinTarget] = useState<{table: string, column: string} | null>(null);
   const [drawingLine, setDrawingLine] = useState<{start: Point, end: Point} | null>(null);
   const [modalState, setModalState] = useState<{isOpen: boolean, details: Omit<Join, 'id' | 'joinType'> | null}>({isOpen: false, details: null});
-  const [sidebarWidth, setSidebarWidth] = useState(450);
-  const isResizingRef = useRef(false);
-  const resizeStartRef = useRef({ width: 0, x: 0 });
   const [hoveredJoin, setHoveredJoin] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -79,36 +76,6 @@ const EnterpriseDBPage: React.FC = () => {
     }
     return targets;
   }, [joinSource, schemas]);
-
- const handleResizeMouseMove = useCallback((e: MouseEvent) => {
-    if (!isResizingRef.current) return;
-    const dx = e.clientX - resizeStartRef.current.x;
-    const newWidth = resizeStartRef.current.width + dx;
-    
-    const mainSidebarWidth = window.innerWidth >= 1024 ? 256 : 0;
-    const minWidth = 350;
-    const maxWidth = (window.innerWidth - mainSidebarWidth) * 0.7; // Max 70% of available space
-    setSidebarWidth(Math.max(minWidth, Math.min(newWidth, maxWidth)));
-  }, []);
-
-  const handleResizeMouseUp = useCallback(() => {
-    isResizingRef.current = false;
-    document.removeEventListener('mousemove', handleResizeMouseMove);
-    document.removeEventListener('mouseup', handleResizeMouseUp);
-    document.body.style.cursor = 'default';
-    document.body.style.userSelect = 'auto';
-  }, [handleResizeMouseMove]);
-
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizingRef.current = true;
-    resizeStartRef.current = { width: sidebarWidth, x: e.clientX };
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    document.addEventListener('mousemove', handleResizeMouseMove);
-    document.addEventListener('mouseup', handleResizeMouseUp);
-  }, [sidebarWidth, handleResizeMouseMove, handleResizeMouseUp]);
-
 
   useEffect(() => {
     chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
@@ -276,91 +243,75 @@ const EnterpriseDBPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-transparent overflow-hidden">
-      <div className="flex-1 flex flex-col-reverse md:flex-row overflow-hidden">
-        <aside 
-            style={{ width: `${sidebarWidth}px` }}
-            className="bg-card/80 backdrop-blur-xl border-t md:border-t-0 md:border-r border-white/20 flex flex-col flex-shrink-0 h-2/5 md:h-full"
-        >
-             <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-                <Container title="1. Connection Status">
-                   <div className="flex items-center text-success bg-success/10 p-3 rounded-lg border border-success/20">
-                        <CheckCircle size={20} className="mr-3 flex-shrink-0" />
-                        <div>
-                            <h4 className="font-semibold">Connected</h4>
-                            <p className="text-sm">sales_db @ demo-rds.clarodb.com</p>
-                        </div>
-                   </div>
-                </Container>
+      <div className="flex-1 relative overflow-hidden">
+        <div ref={canvasRef} className="h-full w-full overflow-auto relative bg-dot-grid">
+          {schemas && (
+            <>
+              <JoinLines joins={joins} drawingLine={drawingLine} hoveredJoinId={hoveredJoin}/>
+              {Object.keys(schemas).map((tableName) => (
+                <InteractiveSchemaCard
+                    key={tableName}
+                    tableName={tableName}
+                    displayName={tableName}
+                    schema={schemas[tableName]}
+                    position={cardPositions[tableName]}
+                    onDrag={handleCardDrag}
+                    onColumnMouseDown={handleColumnMouseDown}
+                    onColumnMouseUp={() => {}}
+                    onColumnEnter={setJoinTarget}
+                    onColumnLeave={() => setJoinTarget(null)}
+                    isSource={joinSource?.table === tableName}
+                    sourceColumn={joinSource?.column}
+                    compatibleTargets={compatibleTargets}
+                    activeJoinColumns={
+                        new Set<string>(joins.filter(j => j.id === hoveredJoin).flatMap(j => [`${j.table1}-${j.column1}`, `${j.table2}-${j.column2}`]))
+                    }
+                />
+              ))}
+              <CanvasToolbar onAutoLayout={handleAutoLayout} />
+            </>
+          )}
+        </div>
+        
+        <div className="absolute top-4 right-4 z-20 w-full max-w-sm space-y-4 animate-scale-in">
+            <Container title="1. Connection Status">
+               <div className="flex items-center text-success bg-success/10 p-3 rounded-lg border border-success/20">
+                    <CheckCircle size={20} className="mr-3 flex-shrink-0" />
+                    <div>
+                        <h4 className="font-semibold">Connected</h4>
+                        <p className="text-sm">sales_db @ demo-rds.clarodb.com</p>
+                    </div>
+               </div>
+            </Container>
 
-                {schemas && Object.keys(schemas).length > 1 && (
-                    <Container title="2. Active Joins">
-                        {joins.length > 0 ? (
-                           <div className="space-y-2">
-                            {joins.map(join => (
-                              <div 
-                                key={join.id} 
-                                className="flex items-center justify-between p-2 bg-secondary-background rounded-md border border-border text-xs transition-all"
-                                onMouseEnter={() => setHoveredJoin(join.id)}
-                                onMouseLeave={() => setHoveredJoin(null)}
-                              >
-                                <div className="flex items-center gap-1.5 text-text-secondary flex-wrap">
-                                  <span className="font-semibold text-text truncate" title={join.table1}>{join.table1}</span>.<span className="font-mono">{join.column1}</span>
-                                  <span className="font-bold text-primary">{`(${join.joinType.charAt(0).toUpperCase()})`}</span>
-                                  <span className="font-semibold text-text truncate" title={join.table2}>{join.table2}</span>.<span className="font-mono">{join.column2}</span>
-                                </div>
-                                <button onClick={() => handleRemoveJoin(join.id)} className="p-1 text-text-secondary hover:text-danger rounded-full ml-2 flex-shrink-0"><X size={14} /></button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                            <div className="flex items-center text-sm text-text-secondary p-2 bg-secondary-background rounded-md">
-                                <MousePointer2 size={16} className="mr-2 flex-shrink-0" />
-                                <p>Drag between columns on the canvas to create a join.</p>
+            {schemas && Object.keys(schemas).length > 1 && (
+                <Container title="2. Active Joins">
+                    {joins.length > 0 ? (
+                       <div className="space-y-2">
+                        {joins.map(join => (
+                          <div 
+                            key={join.id} 
+                            className="flex items-center justify-between p-2 bg-secondary-background rounded-md border border-border text-xs transition-all"
+                            onMouseEnter={() => setHoveredJoin(join.id)}
+                            onMouseLeave={() => setHoveredJoin(null)}
+                          >
+                            <div className="flex items-center gap-1.5 text-text-secondary flex-wrap">
+                              <span className="font-semibold text-text truncate" title={join.table1}>{join.table1}</span>.<span className="font-mono">{join.column1}</span>
+                              <span className="font-bold text-primary">{`(${join.joinType.charAt(0).toUpperCase()})`}</span>
+                              <span className="font-semibold text-text truncate" title={join.table2}>{join.table2}</span>.<span className="font-mono">{join.column2}</span>
                             </div>
-                        )}
-                    </Container>
-                )}
-             </div>
-        </aside>
-
-        <div 
-          onMouseDown={handleResizeMouseDown}
-          className="w-full h-1.5 md:w-1.5 md:h-full cursor-row-resize md:cursor-col-resize bg-border hover:bg-primary/50 active:bg-primary transition-colors flex-shrink-0"
-        />
-
-        <div className="flex-1 flex flex-col overflow-hidden">
-             <div className="p-4 border-b border-border bg-background/80 backdrop-blur-sm z-10 hidden md:block">
-                <h1 className="text-xl font-bold text-text">Database Modeling Canvas</h1>
-                <p className="text-sm text-text-secondary">Drag cards to arrange your schema and drag between columns to create joins.</p>
-            </div>
-            <div ref={canvasRef} className="flex-1 overflow-auto relative bg-dot-grid">
-              {schemas && (
-                <>
-                  <JoinLines joins={joins} drawingLine={drawingLine} hoveredJoinId={hoveredJoin}/>
-                  {Object.keys(schemas).map((tableName) => (
-                    <InteractiveSchemaCard
-                        key={tableName}
-                        tableName={tableName}
-                        displayName={tableName}
-                        schema={schemas[tableName]}
-                        position={cardPositions[tableName]}
-                        onDrag={handleCardDrag}
-                        onColumnMouseDown={handleColumnMouseDown}
-                        onColumnMouseUp={() => {}}
-                        onColumnEnter={setJoinTarget}
-                        onColumnLeave={() => setJoinTarget(null)}
-                        isSource={joinSource?.table === tableName}
-                        sourceColumn={joinSource?.column}
-                        compatibleTargets={compatibleTargets}
-                        activeJoinColumns={
-                            new Set<string>(joins.filter(j => j.id === hoveredJoin).flatMap(j => [`${j.table1}-${j.column1}`, `${j.table2}-${j.column2}`]))
-                        }
-                    />
-                  ))}
-                  <CanvasToolbar onAutoLayout={handleAutoLayout} />
-                </>
-              )}
-            </div>
+                            <button onClick={() => handleRemoveJoin(join.id)} className="p-1 text-text-secondary hover:text-danger rounded-full ml-2 flex-shrink-0"><X size={14} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                        <div className="flex items-center text-sm text-text-secondary p-2 bg-secondary-background rounded-md">
+                            <MousePointer2 size={16} className="mr-2 flex-shrink-0" />
+                            <p>Drag between columns on the canvas to create a join.</p>
+                        </div>
+                    )}
+                </Container>
+            )}
         </div>
       </div>
 

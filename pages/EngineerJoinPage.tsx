@@ -40,9 +40,6 @@ const EngineerJoinPage: React.FC = () => {
   const [joinTarget, setJoinTarget] = useState<{table: string, column: string} | null>(null);
   const [drawingLine, setDrawingLine] = useState<{start: Point, end: Point} | null>(null);
   const [modalState, setModalState] = useState<{isOpen: boolean, details: Omit<Join, 'id' | 'joinType'> | null}>({isOpen: false, details: null});
-  const [sidebarWidth, setSidebarWidth] = useState(450);
-  const isResizingRef = useRef(false);
-  const resizeStartRef = useRef({ width: 0, x: 0 });
   const [hoveredJoin, setHoveredJoin] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -84,36 +81,6 @@ const EngineerJoinPage: React.FC = () => {
     }
     return targets;
   }, [joinSource, schemas]);
-
-
-  const handleResizeMouseMove = useCallback((e: MouseEvent) => {
-    if (!isResizingRef.current) return;
-    const dx = e.clientX - resizeStartRef.current.x;
-    const newWidth = resizeStartRef.current.width + dx;
-
-    const mainSidebarWidth = window.innerWidth >= 1024 ? 256 : 0;
-    const minWidth = 350;
-    const maxWidth = (window.innerWidth - mainSidebarWidth) * 0.7; // Max 70% of available space
-    setSidebarWidth(Math.max(minWidth, Math.min(newWidth, maxWidth)));
-  }, []);
-
-  const handleResizeMouseUp = useCallback(() => {
-    isResizingRef.current = false;
-    document.removeEventListener('mousemove', handleResizeMouseMove);
-    document.removeEventListener('mouseup', handleResizeMouseUp);
-    document.body.style.cursor = 'default';
-    document.body.style.userSelect = 'auto';
-  }, [handleResizeMouseMove]);
-
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizingRef.current = true;
-    resizeStartRef.current = { width: sidebarWidth, x: e.clientX };
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    document.addEventListener('mousemove', handleResizeMouseMove);
-    document.addEventListener('mouseup', handleResizeMouseUp);
-  }, [sidebarWidth, handleResizeMouseMove, handleResizeMouseUp]);
 
 
   useEffect(() => {
@@ -285,17 +252,67 @@ const EngineerJoinPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-transparent overflow-hidden">
-      <div className="flex-1 flex flex-col-reverse md:flex-row overflow-hidden">
-        <aside 
-            style={{ width: `${sidebarWidth}px` }}
-            className="bg-card/80 backdrop-blur-xl border-t md:border-t-0 md:border-r border-white/20 flex flex-col flex-shrink-0 h-2/5 md:h-full"
-        >
-             <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+      <div className="flex-1 relative overflow-hidden">
+        <div ref={canvasRef} className="h-full w-full overflow-auto relative bg-dot-grid">
+          {isProcessing && <div className="absolute inset-0 z-30 bg-white/50 flex justify-center items-center"><Loader2 className="animate-spin text-primary" size={24} /><span className="ml-2 text-text-secondary">Processing files...</span></div>}
+          {pageError && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-full max-w-md p-4">
+                <div className="flex items-start text-danger bg-danger/10 p-4 rounded-lg border border-danger/20 shadow-lg">
+                    <AlertTriangle size={20} className="mr-3 flex-shrink-0 mt-0.5" />
+                    <div><h4 className="font-semibold">File Processing Error</h4><p className="text-sm mt-1">{pageError}</p></div>
+                </div>
+            </div>
+          )}
+          
+          {!schemas && !isProcessing && (
+             <div className="absolute inset-0 flex justify-center items-center p-4">
+                <Container className="max-w-xl w-full">
+                    <EmptyState
+                        icon={<FileUp size={24} className="text-primary" />}
+                        title="Upload files to model and join"
+                        description="Add two or more datasets to visualize them on the canvas and define relationships."
+                    >
+                        <MultiFileUpload files={files} onFilesChange={handleFilesChange} disabled={isProcessing} />
+                    </EmptyState>
+                </Container>
+             </div>
+          )}
+          
+          {schemas && (
+            <>
+              <JoinLines joins={joins} drawingLine={drawingLine} hoveredJoinId={hoveredJoin} />
+              {Object.keys(schemas).map((tableName) => (
+                <InteractiveSchemaCard
+                    key={tableName}
+                    tableName={tableName}
+                    displayName={tableNameMap[tableName]}
+                    schema={schemas[tableName]}
+                    position={cardPositions[tableName]}
+                    onDrag={handleCardDrag}
+                    onColumnMouseDown={handleColumnMouseDown}
+                    onColumnMouseUp={() => {}}
+                    onColumnEnter={setJoinTarget}
+                    onColumnLeave={() => setJoinTarget(null)}
+                    isSource={joinSource?.table === tableName}
+                    sourceColumn={joinSource?.column}
+                    compatibleTargets={compatibleTargets}
+                    activeJoinColumns={
+                        new Set<string>(joins.filter(j => j.id === hoveredJoin).flatMap(j => [`${j.table1}-${j.column1}`, `${j.table2}-${j.column2}`]))
+                    }
+                />
+              ))}
+              <CanvasToolbar onAutoLayout={handleAutoLayout} />
+            </>
+          )}
+        </div>
+        
+        {files.length > 0 && schemas && (
+           <div className="absolute top-4 right-4 z-20 w-full max-w-sm space-y-4 animate-scale-in">
                 <Container title="1. Upload Datasets">
                     <MultiFileUpload files={files} onFilesChange={handleFilesChange} disabled={isProcessing} />
                 </Container>
 
-                {schemas && Object.keys(schemas).length > 1 && (
+                {Object.keys(schemas).length > 1 && (
                     <Container title="2. Active Joins">
                         {joins.length > 0 ? (
                            <div className="space-y-2">
@@ -323,73 +340,9 @@ const EngineerJoinPage: React.FC = () => {
                         )}
                     </Container>
                 )}
-             </div>
-        </aside>
+           </div>
+        )}
 
-        <div 
-          onMouseDown={handleResizeMouseDown}
-          className="w-full h-1.5 md:w-1.5 md:h-full cursor-row-resize md:cursor-col-resize bg-border hover:bg-primary/50 active:bg-primary transition-colors flex-shrink-0"
-        />
-        
-        <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-4 border-b border-border bg-background/80 backdrop-blur-sm z-10 hidden md:block">
-                <h1 className="text-xl font-bold text-text">Data Modeling Canvas</h1>
-                <p className="text-sm text-text-secondary">Upload files, drag cards to arrange them, and drag between columns to create joins.</p>
-            </div>
-            <div ref={canvasRef} className="flex-1 overflow-auto relative bg-dot-grid">
-              {isProcessing && <div className="absolute inset-0 z-30 bg-white/50 flex justify-center items-center"><Loader2 className="animate-spin text-primary" size={24} /><span className="ml-2 text-text-secondary">Processing files...</span></div>}
-              {pageError && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-full max-w-md p-4">
-                    <div className="flex items-start text-danger bg-danger/10 p-4 rounded-lg border border-danger/20 shadow-lg">
-                        <AlertTriangle size={20} className="mr-3 flex-shrink-0 mt-0.5" />
-                        <div><h4 className="font-semibold">File Processing Error</h4><p className="text-sm mt-1">{pageError}</p></div>
-                    </div>
-                </div>
-              )}
-              
-              {!schemas && !isProcessing && (
-                 <div className="absolute inset-0 flex justify-center items-center p-4">
-                    <Container className="max-w-xl w-full">
-                        <EmptyState
-                            icon={<FileUp size={24} className="text-primary" />}
-                            title="Upload files to model and join"
-                            description="Add two or more datasets to visualize them on the canvas and define relationships."
-                        >
-                            <MultiFileUpload files={files} onFilesChange={handleFilesChange} disabled={isProcessing} />
-                        </EmptyState>
-                    </Container>
-                 </div>
-              )}
-              
-              {schemas && (
-                <>
-                  <JoinLines joins={joins} drawingLine={drawingLine} hoveredJoinId={hoveredJoin} />
-                  {Object.keys(schemas).map((tableName) => (
-                    <InteractiveSchemaCard
-                        key={tableName}
-                        tableName={tableName}
-                        displayName={tableNameMap[tableName]}
-                        schema={schemas[tableName]}
-                        position={cardPositions[tableName]}
-                        onDrag={handleCardDrag}
-                        onColumnMouseDown={handleColumnMouseDown}
-                        onColumnMouseUp={() => {}}
-                        onColumnEnter={setJoinTarget}
-                        onColumnLeave={() => setJoinTarget(null)}
-                        isSource={joinSource?.table === tableName}
-                        sourceColumn={joinSource?.column}
-                        compatibleTargets={compatibleTargets}
-                        activeJoinColumns={
-                            new Set<string>(joins.filter(j => j.id === hoveredJoin).flatMap(j => [`${j.table1}-${j.column1}`, `${j.table2}-${j.column2}`]))
-                        }
-                    />
-                  ))}
-                  <CanvasToolbar onAutoLayout={handleAutoLayout} />
-                </>
-              )}
-            </div>
-        </div>
-        
       </div>
 
       <div className="flex-shrink-0 border-t border-border">
