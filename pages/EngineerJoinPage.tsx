@@ -42,6 +42,7 @@ const EngineerJoinPage: React.FC = () => {
   const [modalState, setModalState] = useState<{isOpen: boolean, details: Omit<Join, 'id' | 'joinType'> | null}>({isOpen: false, details: null});
   const [sidebarWidth, setSidebarWidth] = useState(450);
   const isResizingRef = useRef(false);
+  const resizeStartRef = useRef({ width: 0, x: 0 });
   const [hoveredJoin, setHoveredJoin] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -87,9 +88,12 @@ const EngineerJoinPage: React.FC = () => {
 
   const handleResizeMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizingRef.current) return;
-    const newWidth = window.innerWidth - e.clientX;
+    const dx = e.clientX - resizeStartRef.current.x;
+    const newWidth = resizeStartRef.current.width + dx;
+
+    const mainSidebarWidth = window.innerWidth >= 1024 ? 256 : 0;
     const minWidth = 350;
-    const maxWidth = (window.innerWidth - 256) * 0.7; // Max 70% of available space
+    const maxWidth = (window.innerWidth - mainSidebarWidth) * 0.7; // Max 70% of available space
     setSidebarWidth(Math.max(minWidth, Math.min(newWidth, maxWidth)));
   }, []);
 
@@ -104,11 +108,12 @@ const EngineerJoinPage: React.FC = () => {
   const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     isResizingRef.current = true;
+    resizeStartRef.current = { width: sidebarWidth, x: e.clientX };
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', handleResizeMouseMove);
     document.addEventListener('mouseup', handleResizeMouseUp);
-  }, [handleResizeMouseMove, handleResizeMouseUp]);
+  }, [sidebarWidth, handleResizeMouseMove, handleResizeMouseUp]);
 
 
   useEffect(() => {

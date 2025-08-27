@@ -9,6 +9,7 @@ import { AppProvider } from './contexts/AppContext';
 import DemoWorkspacePage from './pages/DemoWorkspacePage';
 import Footer from './components/Footer';
 import { Menu, X } from 'lucide-react';
+import AboutPage from './pages/AboutPage';
 
 const AppContent: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -37,6 +38,7 @@ const AppContent: React.FC = () => {
             <Route path="/analyze" element={<AnalyzePage />} />
             <Route path="/engineer" element={<EngineerJoinPage />} />
             <Route path="/enterprise-db" element={<EnterpriseDBPage />} />
+            <Route path="/about" element={<AboutPage />} />
           </Routes>
         </main>
         <Footer />

@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Sparkles, FileSearch, Combine, DatabaseZap } from 'lucide-react';
+import { Home, Sparkles, FileSearch, Combine, DatabaseZap, Info } from 'lucide-react';
 import { NavItem } from '../types';
 
 const navItems: NavItem[] = [
@@ -9,6 +9,7 @@ const navItems: NavItem[] = [
   { path: '/analyze', name: 'Analyze File', icon: <FileSearch size={20} /> },
   { path: '/engineer', name: 'Engineer & Join', icon: <Combine size={20} /> },
   { path: '/enterprise-db', name: 'Enterprise DB', icon: <DatabaseZap size={20} /> },
+  { path: '/about', name: 'About', icon: <Info size={20} /> },
 ];
 
 interface SidebarProps {
