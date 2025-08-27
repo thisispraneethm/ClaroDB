@@ -27,10 +27,11 @@ export interface InsightGenerationResult {
 }
 
 export interface ChartGenerationResult {
-  chartType: 'bar' | 'line' | 'pie' | 'scatter';
-  dataKey: string;
+  chartType: 'bar' | 'line' | 'pie' | 'scatter' | 'area' | 'composed' | 'stackedBar';
+  dataKeys: string[];
   nameKey: string;
   title: string;
+  composedTypes?: ('bar' | 'line' | 'area')[];
 }
 
 export interface ChartGenerationWithMetadataResult {

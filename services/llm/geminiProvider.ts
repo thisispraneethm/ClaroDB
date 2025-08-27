@@ -250,15 +250,23 @@ ${correctionHint}`;
     const dataPreview = JSON.stringify(data.slice(0, 5), null, 2);
     const modelName = "gemini-2.5-flash";
 
-    const systemPrompt = `You are a data visualization expert. Your task is to analyze a user's question and a dataset to determine the best chart representation.
+    const systemPrompt = `You are a world-class data visualization expert. Your task is to analyze a user's question and a dataset to determine the single best chart representation.
 - User's question: "${question}"
 - Available columns: ${columns.join(', ')}
 - Data preview: ${dataPreview}
+
+CHART SELECTION GUIDELINES:
+- Time-series Trend: If the data has a clear time component (e.g., columns named 'date', 'day', 'month', 'year'), prefer 'line' or 'area' charts to show trends over time.
+- Categorical Comparison: To compare values across different categories, use 'bar'.
+- Proportional Composition: To show parts of a whole for a single metric across categories, use 'pie'. Only use a pie chart for 2-7 categories.
+- Multi-Metric Comparison: If there are multiple numeric columns to compare against a single category, use 'composed' (e.g., bar for one metric, line for another) or 'stackedBar'.
+- Correlation: If the goal is to see the relationship between two numeric variables, use 'scatter'.
+
+OUTPUT REQUIREMENTS:
 - Your output must be a single, valid JSON object with no other text or formatting.
 - The JSON must conform to the provided schema.
-- Choose the best chart type from: 'bar', 'line', 'pie', 'scatter'.
-- For pie charts, 'nameKey' should be the label for slices and 'dataKey' the value. A good pie chart typically has a categorical 'nameKey' and a numeric 'dataKey'.
-- For other charts, 'nameKey' is the X-axis and 'dataKey' is the Y-axis.
+- 'dataKeys' should contain a single element for simple charts (bar, line, area, pie). For 'composed' or 'stackedBar', it can contain multiple keys.
+- For 'composed' charts, the 'composedTypes' array must have the same number of elements as 'dataKeys', specifying the chart type for each key.
 - The 'title' should be a concise and descriptive title for the chart.`;
     
     const userPrompt = "Generate the chart configuration JSON for the provided context.";
@@ -274,21 +282,42 @@ ${correctionHint}`;
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
-                        chartType: { type: Type.STRING, enum: ['bar', 'line', 'pie', 'scatter'], description: 'The type of chart to render.' },
-                        dataKey: { type: Type.STRING, description: 'The column name for the primary metric (Y-axis or pie value).' },
+                        chartType: { type: Type.STRING, enum: ['bar', 'line', 'pie', 'scatter', 'area', 'composed', 'stackedBar'], description: 'The type of chart to render.' },
+                        dataKeys: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Column names for the primary metrics (Y-axis). Single item for simple charts, multiple for composed/stacked.' },
                         nameKey: { type: Type.STRING, description: 'The column name for the category or label (X-axis or pie label).' },
-                        title: { type: Type.STRING, description: 'A descriptive title for the chart.' }
+                        title: { type: Type.STRING, description: 'A descriptive title for the chart.' },
+                        composedTypes: {
+                            type: Type.ARRAY,
+                            nullable: true,
+                            items: { type: Type.STRING, enum: ['bar', 'line', 'area'] },
+                            description: "For 'composed' charts, specifies the type for each dataKey. Must match `dataKeys` length."
+                        }
                     },
-                    required: ["chartType", "dataKey", "nameKey", "title"]
+                    required: ["chartType", "dataKeys", "nameKey", "title"]
                 },
             },
         });
 
       const jsonStr = response.text.trim();
-      const chartConfig = JSON.parse(jsonStr) as ChartGenerationResult;
+      // FIX: The model might return a slightly malformed JSON. Find the start and end of the JSON object.
+      const jsonStart = jsonStr.indexOf('{');
+      const jsonEnd = jsonStr.lastIndexOf('}');
+      if (jsonStart === -1 || jsonEnd === -1) {
+          throw new Error("Generated response is not valid JSON.");
+      }
+      const correctedJsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
+
+      const chartConfig = JSON.parse(correctedJsonStr) as ChartGenerationResult;
       const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
       const completionTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
       const cost = this.calculateCost(modelName, promptTokens, completionTokens);
+      
+      // Backwards compatibility for models that might still return dataKey
+      // @ts-ignore
+      if (chartConfig.dataKey && !chartConfig.dataKeys) {
+        // @ts-ignore
+        chartConfig.dataKeys = [chartConfig.dataKey];
+      }
 
       return {
         chartConfig,
