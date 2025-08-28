@@ -71,7 +71,7 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
 
   return (
     <div
-      className={`absolute bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-lg w-72 flex flex-col transition-all duration-200 hover:shadow-xl hover:scale-[1.02]`}
+      className={`absolute bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-lg w-72 flex flex-col transition-all duration-200 hover:shadow-xl hover:scale-[1.02] select-none`}
       style={{
         left: position.x,
         top: position.y,
@@ -106,7 +106,7 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
               } ${
                 isActiveJoin ? 'bg-primary/20 font-semibold' : ''
               }`}
-              onMouseDown={(e) => { e.stopPropagation(); onColumnMouseDown(tableName, col.name); }}
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onColumnMouseDown(tableName, col.name); }}
               onMouseUp={() => onColumnMouseUp(tableName, col.name)}
               onMouseEnter={() => onColumnEnter({ table: tableName, column: col.name })}
               onMouseLeave={onColumnLeave}

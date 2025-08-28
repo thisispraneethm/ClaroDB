@@ -22,8 +22,8 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
   const [linePositions, setLinePositions] = useState<LinePosition[]>([]);
   const svgRef = useRef<SVGSVGElement>(null);
   const animatedPositionsRef = useRef<Record<string, { p1: Point; p2: Point }>>({});
-  // FIX: Allow undefined for the ref's current value since it's not initialized.
-  const animationFrameIdRef = useRef<number | undefined>();
+  // FIX: The useRef hook requires an initial value. Provided `undefined` to fix the "Expected 1 arguments, but got 0" error.
+  const animationFrameIdRef = useRef<number | undefined>(undefined);
 
   useLayoutEffect(() => {
     const canvas = svgRef.current?.parentElement;
