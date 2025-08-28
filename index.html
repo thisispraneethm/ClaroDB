@@ -17,7 +17,7 @@
       }
       body {
         font-family: var(--font-sans);
-        background-color: #F8F9FC;
+        background-color: transparent;
       }
       .clarodb-loader {
         display: flex;
@@ -43,13 +43,64 @@
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
       }
-      .bg-gradient-mesh {
+      .animated-bg-canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -2;
+        overflow: hidden;
+        filter: blur(60px);
         background-color: #F8F9FC;
-        background-image:
-          radial-gradient(at 0% 0%, hsla(212,100%,85%,0.5) 0px, transparent 50%),
-          radial-gradient(at 98% 2%, hsla(283,100%,90%,0.4) 0px, transparent 50%),
-          radial-gradient(at 80% 90%, hsla(200,100%,80%,0.3) 0px, transparent 50%),
-          radial-gradient(at 10% 95%, hsla(242,100%,88%,0.4) 0px, transparent 50%);
+      }
+      .animated-bg-canvas > div {
+        position: absolute;
+        border-radius: 50%;
+        opacity: 0.6;
+        will-change: transform;
+      }
+      .animated-bg-canvas > div:nth-child(1) {
+        width: 45vw;
+        height: 45vw;
+        min-width: 350px;
+        min-height: 350px;
+        background: hsla(212,100%,85%,1);
+        top: 5%;
+        left: 10%;
+        animation: move-blob-1 25s infinite alternate ease-in-out;
+      }
+      .animated-bg-canvas > div:nth-child(2) {
+        width: 40vw;
+        height: 40vw;
+        min-width: 300px;
+        min-height: 300px;
+        background: hsla(283,100%,90%,1);
+        bottom: 5%;
+        right: 10%;
+        animation: move-blob-2 20s infinite alternate ease-in-out;
+      }
+      .animated-bg-canvas > div:nth-child(3) {
+        width: 35vw;
+        height: 35vw;
+        min-width: 250px;
+        min-height: 250px;
+        background: hsla(200,100%,80%,1);
+        top: 50%;
+        left: 50%;
+        animation: move-blob-3 22s infinite alternate ease-in-out;
+      }
+      @keyframes move-blob-1 {
+        from { transform: translate(-20%, 10%) scale(1); }
+        to { transform: translate(25%, -25%) scale(1.2); }
+      }
+      @keyframes move-blob-2 {
+        from { transform: translate(15%, -10%) scale(1.2); }
+        to { transform: translate(-20%, 20%) scale(0.9); }
+      }
+      @keyframes move-blob-3 {
+        from { transform: translate(-50%, -50%) scale(1); }
+        to { transform: translate(-40%, -60%) scale(1.1); }
       }
       .bg-dot-grid {
         background-color: transparent;
@@ -176,7 +227,12 @@
 }
 </script>
 </head>
-  <body class="bg-gradient-mesh">
+  <body>
+    <div class="animated-bg-canvas">
+      <div></div>
+      <div></div>
+      <div></div>
+    </div>
     <div id="root">
       <div class="clarodb-loader">
         <div class="spinner"></div>

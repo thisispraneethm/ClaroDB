@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 import { ConversationTurn, ChartGenerationResult } from '../types';
-import { Table, BarChart2, Lightbulb, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Table, BarChart2, Lightbulb, ChevronLeft, ChevronRight, Loader2, FileDown, FileText, Printer, FileImage } from 'lucide-react';
 
 interface ResultsDisplayProps {
   turn: ConversationTurn;
@@ -141,6 +141,72 @@ const ChartControls: React.FC<{
     );
 };
 
+const ExportDropdown: React.FC<{
+  activeTab: Tab;
+  onExportCsv: () => void;
+  onPrintInsights: () => void;
+  onExportChart: (format: 'png' | 'svg') => void;
+  disabled: boolean;
+}> = ({ activeTab, onExportCsv, onPrintInsights, onExportChart, disabled }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const createMenuItem = (label: string, icon: React.ReactNode, action: () => void) => (
+        <button
+            onClick={() => { action(); setIsOpen(false); }}
+            className="w-full text-left flex items-center px-3 py-2 text-sm text-text hover:bg-black/5 rounded-md"
+        >
+            {icon}
+            <span className="ml-2">{label}</span>
+        </button>
+    );
+
+    const renderMenuItems = () => {
+        switch(activeTab) {
+            case 'table': 
+                return createMenuItem('Export as CSV', <FileText size={16} />, onExportCsv);
+            case 'insights': 
+                return createMenuItem('Print / Save as PDF', <Printer size={16} />, onPrintInsights);
+            case 'chart': 
+                return (
+                    <>
+                        {createMenuItem('Export as PNG', <FileImage size={16} />, () => onExportChart('png'))}
+                        {createMenuItem('Export as SVG', <FileImage size={16} />, () => onExportChart('svg'))}
+                    </>
+                );
+            default: return null;
+        }
+    };
+    
+    return (
+        <div ref={dropdownRef} className="relative">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                disabled={disabled}
+                className="flex items-center px-3 py-1.5 text-xs font-semibold rounded-full transition-all duration-200 border border-border text-text-secondary hover:text-text hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+                <FileDown size={14} />
+                <span className="ml-1.5">Export</span>
+            </button>
+            {isOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-card backdrop-blur-2xl border border-white/20 rounded-lg shadow-xl p-1.5 z-20 animate-scale-in">
+                    {renderMenuItems()}
+                </div>
+            )}
+        </div>
+    );
+}
+
 
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsights, onGenerateChart }) => {
   const { analysisResult, insightsResult, chartResult, insightsLoading, chartLoading } = turn;
@@ -152,6 +218,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
   const [editableChartConfig, setEditableChartConfig] = useState<ChartGenerationResult | null>(null);
   
   const prevTurnRef = useRef<ConversationTurn | null>(null);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const insightsContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setEditableChartConfig(turn.chartResult?.chartConfig || null);
@@ -199,6 +267,119 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
         }
         return { numericColumns: numeric, categoricalColumns: categorical, allColumns: all };
     }, [data]);
+    
+  const handleExportCsv = () => {
+      if (!data || data.length === 0) return;
+      
+      const headers = Object.keys(data[0]);
+      const csvRows = [
+          headers.join(','),
+          ...data.map(row =>
+              headers.map(fieldName => JSON.stringify(row[fieldName], (_, value) => value === null ? '' : value)).join(',')
+          )
+      ];
+      const csvString = csvRows.join('\r\n');
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.setAttribute('href', url);
+      a.setAttribute('download', 'query_results.csv');
+      a.style.visibility = 'hidden';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+  };
+
+  const handlePrintInsights = () => {
+      if (!insightsContainerRef.current) return;
+      const content = insightsContainerRef.current.innerHTML;
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+          printWindow.document.write(`
+              <html>
+                  <head>
+                      <title>ClaroDB Insights</title>
+                      <style>
+                          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; }
+                          h1, h2, h3, h4, h5, h6 { color: #111; }
+                          strong { font-weight: 600; }
+                          code { background-color: #f0f2f5; padding: 2px 5px; border-radius: 4px; font-family: monospace; }
+                          pre { background-color: #f0f2f5; padding: 1rem; border-radius: 8px; white-space: pre-wrap; word-wrap: break-word; }
+                          blockquote { border-left: 3px solid #d0d7de; padding-left: 1rem; margin-left: 0; color: #57606a; }
+                          ul { padding-left: 1.5rem; }
+                          hr { border: 0; border-top: 1px solid #d8dee4; margin: 1.5rem 0; }
+                          .print-header { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #d8dee4; }
+                          .print-header h1 { font-size: 1.5rem; margin: 0; }
+                          .print-header p { font-size: 0.9rem; color: #57606a; margin: 0.25rem 0 0; }
+                      </style>
+                  </head>
+                  <body>
+                      <div class="print-header">
+                        <h1>Query Insights</h1>
+                        <p>For question: "${turn.question}"</p>
+                      </div>
+                      ${content}
+                  </body>
+              </html>
+          `);
+          printWindow.document.close();
+          printWindow.focus();
+          printWindow.print();
+          printWindow.close();
+      }
+  };
+
+  const handleExportChart = (format: 'png' | 'svg') => {
+      if (!chartContainerRef.current) return;
+      const svgElement = chartContainerRef.current.querySelector('svg');
+      if (!svgElement) return;
+
+      const title = editableChartConfig?.title || 'chart';
+      const filename = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const a = document.createElement('a');
+
+      if (format === 'svg') {
+          const svgString = new XMLSerializer().serializeToString(svgElement);
+          const blob = new Blob([svgString], { type: 'image/svg+xml' });
+          const url = URL.createObjectURL(blob);
+          a.href = url;
+          a.download = `${filename}.svg`;
+          a.click();
+          URL.revokeObjectURL(url);
+      } else { // png
+          const svgString = new XMLSerializer().serializeToString(svgElement);
+          const canvas = document.createElement('canvas');
+          const scale = 2; // For higher resolution
+          const width = svgElement.clientWidth || 500;
+          const height = svgElement.clientHeight || 400;
+
+          canvas.width = width * scale;
+          canvas.height = height * scale;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+          
+          ctx.scale(scale, scale);
+          
+          const img = new Image();
+          const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+          const url = URL.createObjectURL(svgBlob);
+
+          img.onload = () => {
+              ctx.fillStyle = 'white'; // Set a white background
+              ctx.fillRect(0, 0, width, height);
+              ctx.drawImage(img, 0, 0);
+              URL.revokeObjectURL(url);
+              
+              const pngUrl = canvas.toDataURL('image/png');
+              a.href = pngUrl;
+              a.download = `${filename}.png`;
+              a.click();
+          };
+          img.src = url;
+      }
+  };
 
   const renderChart = () => {
     if (chartLoading) {
@@ -240,7 +421,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
           categoricalColumns={categoricalColumns}
           allColumns={allColumns}
         />
-        <div className="h-96 w-full p-4">
+        <div className="h-96 w-full p-4" ref={chartContainerRef}>
             <h4 className="text-center font-semibold mb-4 text-text">{title}</h4>
             <ResponsiveContainer>
               {(() => {
@@ -424,7 +605,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
                     />
                   </div>
                 )}
-                <div className="prose prose-sm max-w-none p-6 text-text prose-headings:text-text prose-strong:text-text">
+                <div ref={insightsContainerRef} className="prose prose-sm max-w-none p-6 text-text prose-headings:text-text prose-strong:text-text">
                     <ReactMarkdown>{insightsResult?.insights || ''}</ReactMarkdown>
                 </div>
             </div>
@@ -435,6 +616,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
         return null;
     }
   }
+  
+  const isExportDisabled = (activeTab === 'table' && data.length === 0) || (activeTab === 'insights' && !hasInsights) || (activeTab === 'chart' && !hasChart);
 
   return (
     <div className="space-y-4">
@@ -455,7 +638,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
             <TabButton icon={<Lightbulb size={16} />} label="Insights" isActive={activeTab === 'insights'} onClick={() => setActiveTab('insights')} />
             <TabButton icon={<BarChart2 size={16} />} label="Chart" isActive={activeTab === 'chart'} onClick={() => setActiveTab('chart')} />
           </div>
-          <div className="flex space-x-2 pb-px">
+          <div className="flex items-center space-x-4">
             {!hasInsights && activeTab === 'insights' && (
                 <button onClick={() => onGenerateInsights(turn.id)} disabled={insightsLoading} className="text-xs font-semibold text-primary hover:text-primary/80 disabled:opacity-50 flex items-center">
                     {insightsLoading && <Loader2 size={14} className="animate-spin mr-1.5" />}
@@ -468,6 +651,13 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
                     Generate Chart
                 </button>
             )}
+             <ExportDropdown
+                activeTab={activeTab}
+                onExportCsv={handleExportCsv}
+                onPrintInsights={handlePrintInsights}
+                onExportChart={handleExportChart}
+                disabled={isExportDisabled}
+             />
           </div>
       </div>
       <div className="animate-fade-in-up">{renderContent()}</div>
