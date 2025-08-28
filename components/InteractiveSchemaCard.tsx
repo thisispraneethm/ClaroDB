@@ -9,6 +9,8 @@ interface InteractiveSchemaCardProps {
   schema: ColumnSchema[];
   position: Point;
   onDrag: (tableName: string, newPosition: Point) => void;
+  onDragStart?: (tableName: string) => void;
+  onDragEnd?: () => void;
   onColumnMouseDown: (tableName: string, columnName: string) => void;
   onColumnMouseUp: (tableName: string, columnName: string) => void;
   onColumnEnter: (target: { table: string, column: string } | null) => void;
@@ -25,6 +27,8 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
   schema,
   position,
   onDrag,
+  onDragStart,
+  onDragEnd,
   onColumnMouseDown,
   onColumnMouseUp,
   onColumnEnter,
@@ -39,6 +43,7 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    onDragStart?.(tableName);
     setIsDragging(true);
     dragStartPos.current = {
       x: e.clientX - position.x,
@@ -56,11 +61,12 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
       setIsDragging(false);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      onDragEnd?.();
     };
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-  }, [position, onDrag, tableName]);
+  }, [position, onDrag, tableName, onDragStart, onDragEnd]);
   
 
   return (

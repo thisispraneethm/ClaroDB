@@ -45,6 +45,7 @@ const EngineerJoinPage: React.FC = () => {
   const [drawingLine, setDrawingLine] = useState<{start: Point, end: Point} | null>(null);
   const [modalState, setModalState] = useState<{isOpen: boolean, details: Omit<Join, 'id' | 'joinType'> | null}>({isOpen: false, details: null});
   const [hoveredJoin, setHoveredJoin] = useState<string | null>(null);
+  const [draggedTable, setDraggedTable] = useState<string | null>(null);
   
   const [resultsWidth, setResultsWidth] = useState(600);
   const isResizing = useRef(false);
@@ -218,23 +219,86 @@ const EngineerJoinPage: React.FC = () => {
     };
 
     const handleAutoLayout = () => {
-        if (!schemas) return;
-        const newPositions: Record<string, Point> = {};
-        const tableNames = Object.keys(schemas);
-        const canvasWidth = canvasRef.current?.clientWidth || 800;
-        const cols = Math.min(4, Math.floor(canvasWidth / 340));
-        const cardWidth = 300;
-        const cardHeight = 320;
-        const padding = 40;
+        if (!schemas || Object.keys(schemas).length === 0) return;
 
-        tableNames.forEach((tableName, i) => {
-            const col = i % cols;
-            const row = Math.floor(i / cols);
-            newPositions[tableName] = {
-                x: col * (cardWidth + padding) + padding,
-                y: row * (cardHeight + padding) + padding,
-            };
+        const tableNames = Object.keys(schemas);
+        const cardWidth = 288; // from w-72 class
+        const cardHeight = 280; // Estimated average height
+        const padding = 60;
+        const canvasWidth = canvasRef.current?.clientWidth || 1000;
+
+        // 1. Build adjacency list for the graph
+        const adjList = new Map<string, string[]>();
+        tableNames.forEach(name => adjList.set(name, []));
+        joins.forEach(join => {
+            if (!adjList.has(join.table1)) adjList.set(join.table1, []);
+            if (!adjList.has(join.table2)) adjList.set(join.table2, []);
+            adjList.get(join.table1)!.push(join.table2);
+            adjList.get(join.table2)!.push(join.table1);
         });
+
+        // 2. Find connected components using BFS
+        const components: string[][] = [];
+        const visited = new Set<string>();
+
+        tableNames.forEach(tableName => {
+            if (!visited.has(tableName)) {
+                const component: string[] = [];
+                const queue: string[] = [tableName];
+                visited.add(tableName);
+                
+                let head = 0;
+                while (head < queue.length) {
+                    const u = queue[head++];
+                    component.push(u);
+                    
+                    adjList.get(u)?.forEach(v => {
+                        if (!visited.has(v)) {
+                            visited.add(v);
+                            queue.push(v);
+                        }
+                    });
+                }
+                components.push(component);
+            }
+        });
+        
+        components.sort((a, b) => b.length - a.length);
+
+        const newPositions: Record<string, Point> = {};
+        let cursorX = padding;
+        let cursorY = padding;
+        let maxRowHeight = 0;
+
+        // 3. Layout each component
+        components.forEach(component => {
+            const componentCols = Math.ceil(Math.sqrt(component.length));
+            const componentWidth = componentCols * (cardWidth + padding);
+            const componentRows = Math.ceil(component.length / componentCols);
+            const componentHeight = componentRows * (cardHeight + padding);
+
+            if (cursorX + componentWidth > canvasWidth && cursorX > padding) {
+                cursorX = padding;
+                cursorY += maxRowHeight;
+                maxRowHeight = 0;
+            }
+
+            component.forEach((tableName, i) => {
+                const row = Math.floor(i / componentCols);
+                const col = i % componentCols;
+                
+                newPositions[tableName] = {
+                    x: cursorX + col * (cardWidth + padding),
+                    y: cursorY + row * (cardHeight + padding),
+                };
+            });
+            
+            cursorX += componentWidth;
+            if (componentHeight > maxRowHeight) {
+                maxRowHeight = componentHeight;
+            }
+        });
+
         setCardPositions(newPositions);
     };
 
@@ -346,7 +410,13 @@ const EngineerJoinPage: React.FC = () => {
             
             {schemas && (
               <>
-                <JoinLines joins={joins} drawingLine={drawingLine} hoveredJoinId={hoveredJoin} />
+                <JoinLines
+                    joins={joins}
+                    drawingLine={drawingLine}
+                    hoveredJoinId={hoveredJoin}
+                    cardPositions={cardPositions}
+                    draggedTable={draggedTable}
+                />
                 {Object.keys(schemas).map((tableName) => (
                   <InteractiveSchemaCard
                       key={tableName}
@@ -355,6 +425,8 @@ const EngineerJoinPage: React.FC = () => {
                       schema={schemas[tableName]}
                       position={cardPositions[tableName]}
                       onDrag={handleCardDrag}
+                      onDragStart={setDraggedTable}
+                      onDragEnd={() => setDraggedTable(null)}
                       onColumnMouseDown={handleColumnMouseDown}
                       onColumnMouseUp={() => {}}
                       onColumnEnter={setJoinTarget}
@@ -363,7 +435,11 @@ const EngineerJoinPage: React.FC = () => {
                       sourceColumn={joinSource?.column}
                       compatibleTargets={compatibleTargets}
                       activeJoinColumns={
-                          new Set<string>(joins.filter(j => j.id === hoveredJoin).flatMap(j => [`${j.table1}-${j.column1}`, `${j.table2}-${j.column2}`]))
+                          new Set<string>(joins.flatMap(j => 
+                            (j.id === hoveredJoin || j.table1 === draggedTable || j.table2 === draggedTable) 
+                            ? [`${j.table1}-${j.column1}`, `${j.table2}-${j.column2}`] 
+                            : []
+                          ))
                       }
                   />
                 ))}
@@ -375,7 +451,7 @@ const EngineerJoinPage: React.FC = () => {
         
         {engineerConversation.length > 0 && (
           <aside className="flex-shrink-0 flex animate-scale-in" style={{ width: `${resultsWidth}px` }}>
-              <div onMouseDown={handleResizeMouseDown} className="w-1.5 h-full cursor-col-resize bg-border/50 hover:bg-primary transition-colors duration-200"></div>
+              <div onMouseDown={handleResizeMouseDown} className="w-1.isResizing.current5 h-full cursor-col-resize bg-border/50 hover:bg-primary transition-colors duration-200"></div>
               <div className="flex flex-col flex-1 bg-secondary-background/50 border-l border-border overflow-hidden">
                   <div className="p-4 border-b border-border">
                       <h2 className="text-lg font-semibold text-text flex items-center"><MessageSquare size={18} className="mr-2 text-primary" /> Query Results</h2>
