@@ -22,20 +22,25 @@ const EngineerJoinPage: React.FC = () => {
     engineerConversation, 
     setEngineerConversation,
     engineerHistory,
-    setEngineerHistory
+    setEngineerHistory,
+    engineerFiles: files,
+    setEngineerFiles: setFiles,
+    engineerSchemas: schemas,
+    setEngineerSchemas: setSchemas,
+    engineerPreviewData: previewData,
+    setEngineerPreviewData: setPreviewData,
+    engineerTableNameMap: tableNameMap,
+    setEngineerTableNameMap: setTableNameMap,
+    engineerJoins: joins,
+    setEngineerJoins: setJoins,
+    engineerCardPositions: cardPositions,
+    setEngineerCardPositions: setCardPositions
   } = useAppContext();
-  
-  const [files, setFiles] = useState<File[]>([]);
-  const [schemas, setSchemas] = useState<TableSchema | null>(null);
-  const [previewData, setPreviewData] = useState<Record<string, Record<string, any>[]>>({});
-  const [tableNameMap, setTableNameMap] = useState<Record<string, string>>({});
-  const [joins, setJoins] = useState<Join[]>([]);
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
 
-  const [cardPositions, setCardPositions] = useState<Record<string, Point>>({});
   const [joinSource, setJoinSource] = useState<{table: string, column: string} | null>(null);
   const [joinTarget, setJoinTarget] = useState<{table: string, column: string} | null>(null);
   const [drawingLine, setDrawingLine] = useState<{start: Point, end: Point} | null>(null);
@@ -154,7 +159,7 @@ const EngineerJoinPage: React.FC = () => {
     } finally {
         setIsProcessing(false);
     }
-  }, [handler, resetConversation]);
+  }, [handler, resetConversation, setFiles, setSchemas, setPreviewData, setTableNameMap, setJoins, setCardPositions]);
 
     const handleMouseMove = useCallback((e: MouseEvent) => {
         if (!joinSourceRef.current || !canvasRef.current) return;

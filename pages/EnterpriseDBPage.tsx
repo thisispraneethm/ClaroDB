@@ -20,18 +20,22 @@ const EnterpriseDBPage: React.FC = () => {
     enterpriseConversation, 
     setEnterpriseConversation,
     enterpriseHistory,
-    setEnterpriseHistory
+    setEnterpriseHistory,
+    enterpriseIsConnected: isConnected,
+    setEnterpriseIsConnected: setIsConnected,
+    enterpriseSchemas: schemas,
+    setEnterpriseSchemas: setSchemas,
+    enterprisePreviewData: previewData,
+    setEnterprisePreviewData: setPreviewData,
+    enterpriseJoins: joins,
+    setEnterpriseJoins: setJoins,
+    enterpriseCardPositions: cardPositions,
+    setEnterpriseCardPositions: setCardPositions
   } = useAppContext();
   
-  const [schemas, setSchemas] = useState<TableSchema | null>(null);
-  const [previewData, setPreviewData] = useState<Record<string, Record<string, any>[]>>({});
-  const [joins, setJoins] = useState<Join[]>([]);
-  
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
   const [question, setQuestion] = useState('');
 
-  const [cardPositions, setCardPositions] = useState<Record<string, Point>>({});
   const [joinSource, setJoinSource] = useState<{table: string, column: string} | null>(null);
   const [joinTarget, setJoinTarget] = useState<{table: string, column: string} | null>(null);
   const [drawingLine, setDrawingLine] = useState<{start: Point, end: Point} | null>(null);

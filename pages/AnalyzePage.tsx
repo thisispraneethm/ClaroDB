@@ -18,16 +18,20 @@ const AnalyzePage: React.FC = () => {
     analyzeConversation, 
     setAnalyzeConversation,
     analyzeHistory,
-    setAnalyzeHistory
+    setAnalyzeHistory,
+    analyzeFile: file,
+    setAnalyzeFile: setFile,
+    analyzeSchemas: schemas,
+    setAnalyzeSchemas: setSchemas,
+    analyzePreviewData: previewData,
+    setAnalyzePreviewData: setPreviewData,
+    analyzeIsSampled: isSampled,
+    setAnalyzeIsSampled: setIsSampled
   } = useAppContext();
 
-  const [file, setFile] = useState<File | null>(null);
-  const [schemas, setSchemas] = useState<TableSchema | null>(null);
-  const [previewData, setPreviewData] = useState<Record<string, any>[] | null>(null);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
-  const [isSampled, setIsSampled] = useState(false);
 
   const {
     askQuestion,
