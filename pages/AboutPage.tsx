@@ -50,7 +50,7 @@ const AboutPage: React.FC = () => {
 
           {/* Tech Stack Section */}
           <div>
-            <h2 className="text-3xl font-bold text-center mb-8 text-text">The Technology Powering Clarity</h2>
+            <h2 className="text-3xl font-bold text-center mb-8 text-text">The Technology Powering ClaroDB</h2>
             <div className="grid md:grid-cols-2 gap-6">
               <TechCard icon={<Zap size={20} />} title="Google Gemini API">
                 The state-of-the-art AI model that translates your plain English questions into precise, executable SQL queries.
