@@ -24,9 +24,10 @@ const CHART_GENERATION_RESPONSE_SCHEMA = {
 };
 
 /**
- * Constructs a simplified and robust prompt for chart generation.
- * This prompt focuses on providing context and guidance, relying on the API's
- * responseSchema feature to handle the specific JSON output format.
+ * Constructs a robust and directive prompt for chart generation.
+ * This prompt gives the AI a clear role, goal, and logical heuristics for chart selection,
+ * ensuring it can reason effectively and produce a valid configuration that adheres
+ * to the API's `responseSchema`.
  * @param question The user's natural language question.
  * @param columns The list of column names in the result set.
  * @param dataPreview A JSON string preview of the data.
@@ -39,25 +40,31 @@ function constructChartGenerationPrompt(
     dataPreview: string,
     columnInfo: { numeric: string[]; categorical: string[] }
 ): string {
-    // This prompt is intentionally minimal. It only provides CONTEXT.
-    // The responsibility of formatting the JSON output is delegated entirely
-    // to the `responseSchema` in the API call, which is the most robust method.
-    return `
-Analyze the following data visualization request to determine the best chart configuration.
+    return `You are an expert data visualization assistant. Your task is to analyze a user's request and a data sample, then return the BEST possible JSON configuration to visualize that data.
 
 ## User's Goal
-Question: "${question}"
+The user wants to visualize the answer to this question: "${question}"
 
-## Data Context
-- Columns available: ${columns.join(', ')}
-- Use for metrics/values (e.g., Y-axis): [${columnInfo.numeric.join(', ') || 'N/A'}]
-- Use for labels/categories (e.g., X-axis): [${columnInfo.categorical.join(', ') || 'N/A'}]
+## Available Data
+The data has the following columns: \`${columns.join(', ')}\`.
+- **Potential Metrics (Numeric Columns for Y-Axis/Values):** \`[${columnInfo.numeric.join(', ') || 'None'}]\`
+- **Potential Categories (Categorical Columns for X-Axis/Labels):** \`[${columnInfo.categorical.join(', ') || 'None'}]\`
 
-## Data Preview (first 50 rows)
+A preview of the data (first 50 rows) is below:
 ${dataPreview}
 
-Based on this context, choose the most appropriate chart type (e.g., 'bar' for comparisons, 'line' for time-series, 'pie' for proportions, 'kpi' for a single metric) and map the columns accordingly.
-`;
+## Visualization Rules & Logic
+Based on the user's goal and the data provided, select the optimal chart type and map the columns.
+- Use 'bar' for comparing values across different categories.
+- Use 'line' for showing trends over time or another continuous sequence.
+- Use 'pie' for showing proportions of a whole (ONLY if there are 7 or fewer categories).
+- Use 'scatter' for exploring the relationship between two numeric columns.
+- Use 'kpi' ONLY if the user is asking for a single, specific metric (e.g., "What is the total sales?").
+- The \`dataKeys\` property in your response MUST be an array of strings chosen from the numeric columns.
+- The \`nameKey\` property MUST be a string chosen from the categorical columns.
+- The \`title\` property must be a clear, concise description of what the chart shows.
+
+Generate the JSON configuration now.`;
 }
 
 export class GeminiProvider extends LLMProvider {
