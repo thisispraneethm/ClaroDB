@@ -111,7 +111,37 @@ export const useAnalysis = ({ handler, llmProvider, conversation, setConversatio
     
     setConversation(prev => prev.map(t => t.id === turnId ? { ...t, chartLoading: true } : t));
     try {
-        const chartResult = await llmProvider.generateChart(turn.question, turn.analysisResult.sqlResult.sql, turn.analysisResult.data);
+        const data = turn.analysisResult.data;
+        const columnInfo = (() => {
+            if (!data || data.length === 0) {
+                return { numeric: [], categorical: [] };
+            }
+            const numeric: string[] = [];
+            const categorical: string[] = [];
+            const all = Object.keys(data[0]);
+            
+            for (const header of all) {
+                const isNumeric = data.every(row => {
+                    const value = row[header];
+                    if (value === null || String(value).trim() === '') return true;
+                    return !isNaN(Number(value));
+                });
+
+                if (isNumeric) {
+                    numeric.push(header);
+                } else {
+                    categorical.push(header);
+                }
+            }
+            return { numeric, categorical };
+        })();
+
+        const chartResult = await llmProvider.generateChart(
+            turn.question, 
+            turn.analysisResult.sqlResult.sql, 
+            turn.analysisResult.data,
+            columnInfo
+        );
         setConversation(prev => prev.map(t => t.id === turnId ? { ...t, chartResult, chartLoading: false } : t));
     } catch (e: any) {
         console.error("Chart generation failed:", e.message);

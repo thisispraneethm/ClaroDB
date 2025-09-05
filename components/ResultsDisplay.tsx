@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -7,7 +9,7 @@ import {
 } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 import { ConversationTurn, ChartGenerationResult } from '../types';
-import { Table, BarChart2, Lightbulb, ChevronLeft, ChevronRight, Loader2, FileDown, FileText, Printer, FileImage } from 'lucide-react';
+import { Table, BarChart2, Lightbulb, ChevronLeft, ChevronRight, Loader2, FileDown, FileText, Printer, FileImage, Info } from 'lucide-react';
 
 interface ResultsDisplayProps {
   turn: ConversationTurn;
@@ -231,7 +233,11 @@ const ExportDropdown: React.FC<{
 const tickProps = { fontSize: 11, fill: '#5A6474', dy: 5 };
 
 const BarChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
-  <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+  // Defensive check for required props
+  !config.dataKeys || config.dataKeys.length === 0 ? (
+    <p className="text-center py-8 text-text-secondary">Invalid chart configuration: Missing data key for Y-axis.</p>
+  ) : (
+    <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
     <defs>
       <filter id="bar-shadow" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor={getColor(0)} floodOpacity="0.3"/>
@@ -243,7 +249,8 @@ const BarChartComponent = React.memo<ChartComponentProps>(({ data, config }) => 
     <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
     <Legend wrapperStyle={{fontSize: "12px"}} />
     <Bar dataKey={config.dataKeys[0]} fill={getColor(0)} radius={[6, 6, 0, 0]} style={{ filter: 'url(#bar-shadow)' }}/>
-  </BarChart>
+    </BarChart>
+  )
 ));
 
 const StackedBarChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
@@ -260,7 +267,10 @@ const StackedBarChartComponent = React.memo<ChartComponentProps>(({ data, config
 ));
 
 const LineChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
-  <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+    !config.dataKeys || config.dataKeys.length === 0 ? (
+    <p className="text-center py-8 text-text-secondary">Invalid chart configuration: Missing data key for Y-axis.</p>
+  ) : (
+    <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
       <defs>
         <filter id="line-shadow" x="-50%" y="-50%" width="200%" height="200%">
             <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor={getColor(0)} floodOpacity="0.4"/>
@@ -272,11 +282,15 @@ const LineChartComponent = React.memo<ChartComponentProps>(({ data, config }) =>
     <Tooltip content={<CustomTooltip />} cursor={{ stroke: getColor(0), strokeWidth: 1, strokeDasharray: "4 4" }}/>
     <Legend wrapperStyle={{fontSize: "12px"}}/>
     <Line type="monotone" dataKey={config.dataKeys[0]} stroke={getColor(0)} strokeWidth={2.5} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: getColor(0) }} style={{ filter: 'url(#line-shadow)' }}/>
-  </LineChart>
+    </LineChart>
+  )
 ));
 
 const AreaChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
-  <AreaChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+    !config.dataKeys || config.dataKeys.length === 0 ? (
+    <p className="text-center py-8 text-text-secondary">Invalid chart configuration: Missing data key for Y-axis.</p>
+  ) : (
+    <AreaChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
       <defs>
       <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
         <stop offset="5%" stopColor={getColor(0)} stopOpacity={0.4}/>
@@ -292,7 +306,8 @@ const AreaChartComponent = React.memo<ChartComponentProps>(({ data, config }) =>
     <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
     <Legend wrapperStyle={{fontSize: "12px"}}/>
     <Area type="monotone" dataKey={config.dataKeys[0]} stroke={getColor(0)} strokeWidth={2.5} fill="url(#areaGradient)" dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: getColor(0) }} style={{ filter: 'url(#line-shadow)' }} />
-  </AreaChart>
+    </AreaChart>
+  )
 ));
 
 const ComposedChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
@@ -315,7 +330,7 @@ const ComposedChartComponent = React.memo<ChartComponentProps>(({ data, config }
 ));
 
 const PieChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
-  <PieChart>
+    <PieChart>
     <Pie 
       data={data} 
       dataKey={config.dataKeys[0]} 
@@ -333,10 +348,13 @@ const PieChartComponent = React.memo<ChartComponentProps>(({ data, config }) => 
     </Pie>
     <Tooltip content={<CustomTooltip />} />
     <Legend wrapperStyle={{fontSize: "12px"}}/>
-  </PieChart>
+    </PieChart>
 ));
 
 const ScatterChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
+    !config.dataKeys || config.dataKeys.length === 0 || !config.nameKey ? (
+    <p className="text-center py-8 text-text-secondary">Invalid chart configuration: A scatter plot requires two numeric axes.</p>
+  ) : (
     <ScatterChart margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
         <CartesianGrid stroke="rgba(0,0,0,0.05)" />
         <XAxis type="number" dataKey={config.nameKey} name={config.nameKey} tickLine={false} axisLine={false} tick={tickProps} />
@@ -345,6 +363,7 @@ const ScatterChartComponent = React.memo<ChartComponentProps>(({ data, config })
         <Legend wrapperStyle={{fontSize: "12px"}}/>
         <Scatter name={config.title} data={data} fill={getColor(0)} />
     </ScatterChart>
+  )
 ));
 
 const KPIComponent = React.memo<ChartComponentProps>(({ data, config }) => {
@@ -434,18 +453,35 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
         const numeric: string[] = [];
         const categorical: string[] = [];
         const all = Object.keys(data[0]);
+        
         for (const header of all) {
-            const isNumeric = data.every(row => row[header] === null || typeof row[header] === 'number');
+            // Robust numeric check: handles numbers and valid numeric strings, ignoring null/empty.
+            const isNumeric = data.every(row => {
+                const value = row[header];
+                if (value === null || String(value).trim() === '') return true; // Treat null/empty as non-decisive
+                return !isNaN(Number(value));
+            });
+
             if (isNumeric) {
                 numeric.push(header);
             } else {
                 categorical.push(header);
             }
         }
-        return { numericColumns: numeric, categoricalColumns: categorical, allColumns: all };
+      return { numericColumns: numeric, categoricalColumns: categorical, allColumns: all };
     }, [data]);
     
-  const handleExportCsv = () => {
+    // Coerce numeric string values to numbers for robust charting
+    const chartReadyData = useMemo(() => {
+        if (numericColumns.length === 0) return data;
+        return data.map(row => {
+            const newRow = { ...row };
+            numericColumns.forEach(col => { if (newRow[col] !== null) newRow[col] = Number(newRow[col]); });
+            return newRow;
+        });
+    }, [data, numericColumns]);
+
+    const handleExportCsv = () => {
       if (!data || data.length === 0) return;
       
       const headers = Object.keys(data[0]);
@@ -562,23 +598,44 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
     if (chartLoading) {
       return <div className="text-center py-8 text-text-secondary flex items-center justify-center"><Loader2 size={20} className="animate-spin mr-2" /> Generating chart...</div>;
     }
-    if (!editableChartConfig || !data || data.length === 0) return (
-        <div className="bg-secondary-background rounded-lg border border-border">
-            {chartResult && (
-              <div className="px-4 py-2 border-b border-border">
-                <MetadataDisplay
-                    label="Chart Generation"
-                    model={chartResult.model}
-                    cost={chartResult.cost}
-                    prompt_tokens={chartResult.prompt_tokens}
-                    completion_tokens={chartResult.completion_tokens}
-                />
-              </div>
-            )}
-            <div className="text-center py-8 text-text-secondary">Chart could not be generated for this query.</div>
-        </div>
-    );
-    const { chartType } = editableChartConfig;
+
+    if (!editableChartConfig || !data || data.length === 0) {
+        let reason = "The AI couldn't determine a suitable chart for this data.";
+        if (!data || data.length === 0) {
+            reason = "There is no data to visualize.";
+        } else if (Object.keys(data[0] || {}).length < 1) {
+            reason = "The query result has no columns to visualize.";
+        }
+        
+        return (
+            <div className="bg-secondary-background rounded-lg border border-border">
+                {chartResult && (
+                  <div className="px-4 py-2 border-b border-border">
+                    <MetadataDisplay
+                        label="Chart Generation"
+                        model={chartResult.model}
+                        cost={chartResult.cost}
+                        prompt_tokens={chartResult.prompt_tokens}
+                        completion_tokens={chartResult.completion_tokens}
+                    />
+                  </div>
+                )}
+                <div className="text-center p-8 text-text-secondary">
+                    <p className="font-semibold text-text">Chart could not be generated.</p>
+                    <p className="text-sm mt-1">{reason}</p>
+                </div>
+            </div>
+        );
+    }
+
+    const configToRender = { ...editableChartConfig };
+    let wasOverridden = false;
+    if (configToRender.chartType === 'pie' && data.length > 7) {
+        configToRender.chartType = 'bar';
+        wasOverridden = true;
+    }
+
+    const { chartType } = configToRender;
     const ChartComponent = CHART_COMPONENTS[chartType];
 
     return (
@@ -601,11 +658,17 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
                 allColumns={allColumns}
             />
         )}
+        {wasOverridden && (
+            <div className="p-3 text-sm text-info-text bg-info-background border-b border-info-border flex items-center gap-2">
+                <Info size={16} />
+                <p>Chart type automatically changed to Bar Chart for better visualization.</p>
+            </div>
+        )}
         <div className="h-96 w-full p-4" ref={chartContainerRef}>
             {chartType !== 'kpi' && <h4 className="text-center font-semibold mb-4 text-text">{editableChartConfig.title}</h4>}
             <ResponsiveContainer>
                {ChartComponent ? (
-                <ChartComponent data={data} config={editableChartConfig} />
+                <ChartComponent data={chartReadyData} config={configToRender} />
               ) : (
                 <div className="text-center py-8 text-text-secondary">Unsupported chart type: {chartType}</div>
               )}

@@ -23,6 +23,42 @@ const CHART_GENERATION_RESPONSE_SCHEMA = {
     required: ["chartType", "dataKeys", "nameKey", "title"]
 };
 
+/**
+ * Constructs a simplified and robust prompt for chart generation.
+ * This prompt focuses on providing context and guidance, relying on the API's
+ * responseSchema feature to handle the specific JSON output format.
+ * @param question The user's natural language question.
+ * @param columns The list of column names in the result set.
+ * @param dataPreview A JSON string preview of the data.
+ * @param columnInfo Pre-classified numeric and categorical columns.
+ * @returns A formatted string to be used as the prompt for the AI.
+ */
+function constructChartGenerationPrompt(
+    question: string,
+    columns: string[],
+    dataPreview: string,
+    columnInfo: { numeric: string[]; categorical: string[] }
+): string {
+    // This prompt is intentionally minimal. It only provides CONTEXT.
+    // The responsibility of formatting the JSON output is delegated entirely
+    // to the `responseSchema` in the API call, which is the most robust method.
+    return `
+Analyze the following data visualization request to determine the best chart configuration.
+
+## User's Goal
+Question: "${question}"
+
+## Data Context
+- Columns available: ${columns.join(', ')}
+- Use for metrics/values (e.g., Y-axis): [${columnInfo.numeric.join(', ') || 'N/A'}]
+- Use for labels/categories (e.g., X-axis): [${columnInfo.categorical.join(', ') || 'N/A'}]
+
+## Data Preview (first 50 rows)
+${dataPreview}
+
+Based on this context, choose the most appropriate chart type (e.g., 'bar' for comparisons, 'line' for time-series, 'pie' for proportions, 'kpi' for a single metric) and map the columns accordingly.
+`;
+}
 
 export class GeminiProvider extends LLMProvider {
   private ai: GoogleGenAI;
@@ -241,7 +277,12 @@ ${previewStr}`;
     }
   }
 
-  async generateChart(question: string, sql: string, data: Record<string, any>[]): Promise<ChartGenerationWithMetadataResult> {
+  async generateChart(
+    question: string,
+    sql: string,
+    data: Record<string, any>[],
+    columnInfo: { numeric: string[], categorical: string[] }
+  ): Promise<ChartGenerationWithMetadataResult> {
     if (data.length === 0 || Object.keys(data[0]).length < 1) {
         return { chartConfig: null, model: 'N/A', cost: 0, prompt_tokens: 0, completion_tokens: 0 };
     }
@@ -249,58 +290,32 @@ ${previewStr}`;
     const dataPreview = JSON.stringify(data.slice(0, 50), null, 2);
     const modelName = "gemini-2.5-flash";
     
-    const systemInstruction = `You are a data visualization expert. Your sole purpose is to generate a single, valid JSON object that strictly conforms to the provided schema. Do not include any other text, explanations, or markdown formatting. Your entire response must be the JSON object.`;
-
-    const userPrompt = `
-Analyze the following context and generate the JSON configuration for the single best chart to visualize the data.
-
-CONTEXT:
-- User's original question: "${question}"
-- Executed SQL query: "${sql}"
-- Resulting data columns: [${columns.join(', ')}]
-- Data preview (up to 50 rows):
-${dataPreview}
-
-CHART SELECTION GUIDELINES:
-Follow these rules to determine the chartType:
-- **KPI Card Rule**: If the data contains exactly one row, you MUST use 'kpi'. This is for displaying a single key metric. The 'title' should be the metric's name, 'nameKey' the category, and 'dataKeys' the numeric value column.
-- **Time-Series Rule**: If a column name clearly indicates a time-series (e.g., 'date', 'year', 'month', 'day'), prefer a 'line' chart to show trends. An 'area' chart is a suitable alternative.
-- **Categorical Comparison Rule**: To compare a single numeric metric across distinct categories, use a 'bar' chart.
-- **Proportional Rule**: To show the composition of a whole (i.e., percentages), use a 'pie' chart. Only use this for 2 to 7 categories.
-- **Correlation Rule**: To show the relationship between two numeric columns, you MUST use a 'scatter' chart.
-- **Multi-Metric Rule**: To compare multiple numeric metrics across the same categories, use 'stackedBar' or 'composed'.
-
-JSON OUTPUT REQUIREMENTS:
-- The JSON output must be valid and adhere strictly to the schema.
-- 'dataKeys': An array of column names for the primary metrics (Y-axis). Must contain numeric data.
-- 'nameKey': The column name for labels (X-axis or pie slices). Usually contains categorical or date data.
-- 'title': A concise, descriptive title for the chart.
-- 'composedTypes': Only for 'composed' charts. An array specifying the type ('bar', 'line', 'area') for each key in 'dataKeys'. Its length must equal the length of 'dataKeys'.
-`;
+    const userPrompt = constructChartGenerationPrompt(question, columns, dataPreview, columnInfo);
 
     try {
         const response = await this.ai.models.generateContent({
             model: modelName,
             contents: userPrompt,
             config: {
-                systemInstruction: systemInstruction,
                 responseMimeType: "application/json",
                 responseSchema: CHART_GENERATION_RESPONSE_SCHEMA,
             },
         });
 
-      const rawText = response.text.trim();
+      // Defensive sanitization in case the model occasionally adds markdown fences despite instructions.
+      const sanitizedText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
       
-      type RawChartConfig = Partial<ChartGenerationResult> & { dataKey?: string };
-      const rawConfig = JSON.parse(rawText) as RawChartConfig;
+      if (!sanitizedText) {
+        throw new Error("Received empty response from the model.");
+      }
+      
+      const chartConfig = JSON.parse(sanitizedText) as ChartGenerationResult;
 
-      const chartConfig: ChartGenerationResult = {
-        chartType: rawConfig.chartType!,
-        dataKeys: rawConfig.dataKeys || (rawConfig.dataKey ? [rawConfig.dataKey] : []),
-        nameKey: rawConfig.nameKey!,
-        title: rawConfig.title!,
-        composedTypes: rawConfig.composedTypes,
-      };
+      // Final validation to ensure the parsed object meets our requirements.
+      if (!chartConfig.chartType || !chartConfig.dataKeys || !Array.isArray(chartConfig.dataKeys) || !chartConfig.nameKey || !chartConfig.title) {
+          throw new Error(`Received incomplete chart configuration from the model: ${sanitizedText}`);
+      }
+      
       const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
       const completionTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
       const cost = this.calculateCost(modelName, promptTokens, completionTokens);
@@ -313,7 +328,7 @@ JSON OUTPUT REQUIREMENTS:
         completion_tokens: completionTokens
       };
     } catch (e: any) {
-      console.error("Chart generation failed, returning null.", e);
+      console.error("Chart generation failed. Error:", e instanceof Error ? e.message : String(e));
       return {
           chartConfig: null, model: modelName, cost: 0, prompt_tokens: 0, completion_tokens: 0
       };
