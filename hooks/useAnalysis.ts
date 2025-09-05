@@ -68,7 +68,7 @@ export const useAnalysis = ({ handler, llmProvider, conversation, setConversatio
 
     try {
       const data = await handler.executeQuery(sqlToExecute);
-      const analysisResult = { sqlResult: turn.sqlResult, data };
+      const analysisResult = { sqlResult: { ...turn.sqlResult, sql: sqlToExecute }, data };
 
       setConversation(prev => prev.map(t => 
         t.id === turnId ? { ...t, state: 'complete', analysisResult } : t
@@ -111,7 +111,7 @@ export const useAnalysis = ({ handler, llmProvider, conversation, setConversatio
     
     setConversation(prev => prev.map(t => t.id === turnId ? { ...t, chartLoading: true } : t));
     try {
-        const chartResult = await llmProvider.generateChart(turn.question, turn.analysisResult.data);
+        const chartResult = await llmProvider.generateChart(turn.question, turn.analysisResult.sqlResult.sql, turn.analysisResult.data);
         setConversation(prev => prev.map(t => t.id === turnId ? { ...t, chartResult, chartLoading: false } : t));
     } catch (e: any) {
         console.error("Chart generation failed:", e.message);
@@ -126,7 +126,7 @@ export const useAnalysis = ({ handler, llmProvider, conversation, setConversatio
   const resetConversation = () => {
     setConversation([]);
     setChatSession(null);
-  }
+  };
 
   const isProcessing = conversation.some(t => t.state === 'sql_generating' || t.state === 'executing');
 

@@ -1,7 +1,9 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-    PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart 
+    PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart,
+    ScatterChart, Scatter
 } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 import { ConversationTurn, ChartGenerationResult } from '../types';
@@ -334,9 +336,42 @@ const PieChartComponent = React.memo<ChartComponentProps>(({ data, config }) => 
   </PieChart>
 ));
 
-const ScatterChartComponent = React.memo<ChartComponentProps>(() => (
-    <div className="text-center py-8 text-text-secondary">Scatter charts are not yet implemented.</div>
+const ScatterChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
+    <ScatterChart margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+        <CartesianGrid stroke="rgba(0,0,0,0.05)" />
+        <XAxis type="number" dataKey={config.nameKey} name={config.nameKey} tickLine={false} axisLine={false} tick={tickProps} />
+        <YAxis type="number" dataKey={config.dataKeys[0]} name={config.dataKeys[0]} tickLine={false} axisLine={false} tick={tickProps} />
+        <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
+        <Legend wrapperStyle={{fontSize: "12px"}}/>
+        <Scatter name={config.title} data={data} fill={getColor(0)} />
+    </ScatterChart>
 ));
+
+const KPIComponent = React.memo<ChartComponentProps>(({ data, config }) => {
+    if (data.length === 0) return null;
+    const row = data[0];
+    const metricValue = row[config.dataKeys[0]];
+    const metricLabel = config.title;
+    const categoryValue = row[config.nameKey];
+
+    const formattedValue = typeof metricValue === 'number'
+        ? metricValue.toLocaleString(undefined, { maximumFractionDigits: 2, notation: 'compact' })
+        : String(metricValue);
+
+    return (
+        <div className="flex flex-col items-center justify-center h-full text-center p-4">
+            <p className="text-md font-semibold text-text-secondary mb-2 truncate" title={metricLabel}>{metricLabel}</p>
+            <h2 className="text-6xl font-bold text-text tracking-tight">
+                {formattedValue}
+            </h2>
+            {categoryValue && (
+                <p className="text-sm text-text-secondary mt-2">
+                    in <span className="font-semibold text-text">{categoryValue}</span>
+                </p>
+            )}
+        </div>
+    );
+});
 
 const CHART_COMPONENTS: { [key in ChartGenerationResult['chartType']]: React.FC<ChartComponentProps> } = {
     bar: BarChartComponent,
@@ -346,6 +381,7 @@ const CHART_COMPONENTS: { [key in ChartGenerationResult['chartType']]: React.FC<
     composed: ComposedChartComponent,
     pie: PieChartComponent,
     scatter: ScatterChartComponent,
+    kpi: KPIComponent,
 };
 
 
@@ -371,7 +407,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
     
     const justGotData = !prevTurn?.analysisResult && !!turn.analysisResult;
     const justGotInsights = !prevTurn?.insightsResult && !!turn.insightsResult;
-    const justGotChart = !prevTurn?.chartResult?.chartConfig && !!turn.chartResult?.chartConfig;
+    const justGotChart = !prevTurn?.chartResult && !!turn.chartResult;
 
     if (justGotChart) {
         setActiveTab('chart');
@@ -542,7 +578,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
             <div className="text-center py-8 text-text-secondary">Chart could not be generated for this query.</div>
         </div>
     );
-    const { chartType, title } = editableChartConfig;
+    const { chartType } = editableChartConfig;
     const ChartComponent = CHART_COMPONENTS[chartType];
 
     return (
@@ -556,15 +592,17 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
               completion_tokens={chartResult!.completion_tokens}
           />
         </div>
-        <ChartControls
-          config={editableChartConfig}
-          setConfig={setEditableChartConfig}
-          numericColumns={numericColumns}
-          categoricalColumns={categoricalColumns}
-          allColumns={allColumns}
-        />
+        {chartType !== 'kpi' && (
+            <ChartControls
+                config={editableChartConfig}
+                setConfig={setEditableChartConfig}
+                numericColumns={numericColumns}
+                categoricalColumns={categoricalColumns}
+                allColumns={allColumns}
+            />
+        )}
         <div className="h-96 w-full p-4" ref={chartContainerRef}>
-            <h4 className="text-center font-semibold mb-4 text-text">{title}</h4>
+            {chartType !== 'kpi' && <h4 className="text-center font-semibold mb-4 text-text">{editableChartConfig.title}</h4>}
             <ResponsiveContainer>
                {ChartComponent ? (
                 <ChartComponent data={data} config={editableChartConfig} />

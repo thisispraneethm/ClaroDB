@@ -6,5 +6,5 @@ export abstract class LLMProvider {
   abstract startChatSession(schemas: TableSchema, dialect: string, dataPreview?: Record<string, Record<string, any>[]>, joins?: Join[], corrections?: Correction[]): Chat;
   abstract continueChat(chat: Chat, prompt: string, schemas: TableSchema): Promise<SQLGenerationResult>;
   abstract generateInsights(question: string, data: Record<string, any>[]): Promise<InsightGenerationResult>;
-  abstract generateChart(question: string, data: Record<string, any>[]): Promise<ChartGenerationWithMetadataResult>;
+  abstract generateChart(question: string, sql: string, data: Record<string, any>[]): Promise<ChartGenerationWithMetadataResult>;
 }

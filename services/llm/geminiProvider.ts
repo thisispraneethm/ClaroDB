@@ -6,6 +6,24 @@ import { config } from '../../config';
 import { enhancePromptWithSchemaAwareness } from '../../utils/promptEnhancer';
 import { Correction } from "../handlers/base";
 
+const CHART_GENERATION_RESPONSE_SCHEMA = {
+    type: Type.OBJECT,
+    properties: {
+        chartType: { type: Type.STRING, enum: ['bar', 'line', 'pie', 'scatter', 'area', 'composed', 'stackedBar', 'kpi'], description: 'The type of chart to render.' },
+        dataKeys: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Column names for the primary metrics (Y-axis). Single item for simple charts, multiple for composed/stacked.' },
+        nameKey: { type: Type.STRING, description: 'The column name for the category or label (X-axis or pie label).' },
+        title: { type: Type.STRING, description: 'A descriptive title for the chart.' },
+        composedTypes: {
+            type: Type.ARRAY,
+            nullable: true,
+            items: { type: Type.STRING, enum: ['bar', 'line', 'area'] },
+            description: "For 'composed' charts, specifies the type for each dataKey. Must match `dataKeys` length."
+        }
+    },
+    required: ["chartType", "dataKeys", "nameKey", "title"]
+};
+
+
 export class GeminiProvider extends LLMProvider {
   private ai: GoogleGenAI;
 
@@ -199,8 +217,6 @@ ${previewStr}`;
     try {
       const modelName = 'gemini-2.5-flash';
 
-      // FIX: The `generateContent` API uses `config.systemInstruction` for system-level prompts.
-      // The `contents` property should be the user prompt. This resolves the type error.
       const response = await this.ai.models.generateContent({
         model: modelName,
         contents: userPrompt,
@@ -225,85 +241,61 @@ ${previewStr}`;
     }
   }
 
-  async generateChart(question: string, data: Record<string, any>[]): Promise<ChartGenerationWithMetadataResult> {
-    if (data.length === 0 || Object.keys(data[0]).length < 2) {
-        return {
-            chartConfig: null,
-            model: 'N/A',
-            cost: 0,
-            prompt_tokens: 0,
-            completion_tokens: 0,
-        };
+  async generateChart(question: string, sql: string, data: Record<string, any>[]): Promise<ChartGenerationWithMetadataResult> {
+    if (data.length === 0 || Object.keys(data[0]).length < 1) {
+        return { chartConfig: null, model: 'N/A', cost: 0, prompt_tokens: 0, completion_tokens: 0 };
     }
     const columns = Object.keys(data[0]);
-    const dataPreview = JSON.stringify(data.slice(0, 5), null, 2);
+    const dataPreview = JSON.stringify(data.slice(0, 50), null, 2);
     const modelName = "gemini-2.5-flash";
+    
+    const systemInstruction = `You are a data visualization expert. Your sole purpose is to generate a single, valid JSON object that strictly conforms to the provided schema. Do not include any other text, explanations, or markdown formatting. Your entire response must be the JSON object.`;
 
-    const systemPrompt = `You are a world-class data visualization expert. Your task is to analyze a user's question and a dataset to determine the single best chart representation.
-- User's question: "${question}"
-- Available columns: ${columns.join(', ')}
-- Data preview: ${dataPreview}
+    const userPrompt = `
+Analyze the following context and generate the JSON configuration for the single best chart to visualize the data.
+
+CONTEXT:
+- User's original question: "${question}"
+- Executed SQL query: "${sql}"
+- Resulting data columns: [${columns.join(', ')}]
+- Data preview (up to 50 rows):
+${dataPreview}
 
 CHART SELECTION GUIDELINES:
-- Time-series Trend: If the data has a clear time component (e.g., columns named 'date', 'day', 'month', 'year'), prefer 'line' or 'area' charts to show trends over time.
-- Categorical Comparison: To compare values across different categories, use 'bar'.
-- Proportional Composition: To show parts of a whole for a single metric across categories, use 'pie'. Only use a pie chart for 2-7 categories.
-- Multi-Metric Comparison: If there are multiple numeric columns to compare against a single category, use 'composed' (e.g., bar for one metric, line for another) or 'stackedBar'.
-- Correlation: If the goal is to see the relationship between two numeric variables, use 'scatter'.
+Follow these rules to determine the chartType:
+- **KPI Card Rule**: If the data contains exactly one row, you MUST use 'kpi'. This is for displaying a single key metric. The 'title' should be the metric's name, 'nameKey' the category, and 'dataKeys' the numeric value column.
+- **Time-Series Rule**: If a column name clearly indicates a time-series (e.g., 'date', 'year', 'month', 'day'), prefer a 'line' chart to show trends. An 'area' chart is a suitable alternative.
+- **Categorical Comparison Rule**: To compare a single numeric metric across distinct categories, use a 'bar' chart.
+- **Proportional Rule**: To show the composition of a whole (i.e., percentages), use a 'pie' chart. Only use this for 2 to 7 categories.
+- **Correlation Rule**: To show the relationship between two numeric columns, you MUST use a 'scatter' chart.
+- **Multi-Metric Rule**: To compare multiple numeric metrics across the same categories, use 'stackedBar' or 'composed'.
 
-OUTPUT REQUIREMENTS:
-- Your output must be a single, valid JSON object with no other text or formatting.
-- The JSON must conform to the provided schema.
-- 'dataKeys' should contain a single element for simple charts (bar, line, area, pie). For 'composed' or 'stackedBar', it can contain multiple keys.
-- For 'composed' charts, the 'composedTypes' array must have the same number of elements as 'dataKeys', specifying the chart type for each key.
-- The 'title' should be a concise and descriptive title for the chart.`;
-    
-    const userPrompt = "Generate the chart configuration JSON for the provided context.";
+JSON OUTPUT REQUIREMENTS:
+- The JSON output must be valid and adhere strictly to the schema.
+- 'dataKeys': An array of column names for the primary metrics (Y-axis). Must contain numeric data.
+- 'nameKey': The column name for labels (X-axis or pie slices). Usually contains categorical or date data.
+- 'title': A concise, descriptive title for the chart.
+- 'composedTypes': Only for 'composed' charts. An array specifying the type ('bar', 'line', 'area') for each key in 'dataKeys'. Its length must equal the length of 'dataKeys'.
+`;
 
     try {
-        // FIX: The `generateContent` API uses `config.systemInstruction` for system-level prompts.
-        // The `contents` property should be the user prompt. This resolves the type error.
         const response = await this.ai.models.generateContent({
             model: modelName,
             contents: userPrompt,
             config: {
-                systemInstruction: systemPrompt,
+                systemInstruction: systemInstruction,
                 responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        chartType: { type: Type.STRING, enum: ['bar', 'line', 'pie', 'scatter', 'area', 'composed', 'stackedBar'], description: 'The type of chart to render.' },
-                        dataKeys: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Column names for the primary metrics (Y-axis). Single item for simple charts, multiple for composed/stacked.' },
-                        nameKey: { type: Type.STRING, description: 'The column name for the category or label (X-axis or pie label).' },
-                        title: { type: Type.STRING, description: 'A descriptive title for the chart.' },
-                        composedTypes: {
-                            type: Type.ARRAY,
-                            nullable: true,
-                            items: { type: Type.STRING, enum: ['bar', 'line', 'area'] },
-                            description: "For 'composed' charts, specifies the type for each dataKey. Must match `dataKeys` length."
-                        }
-                    },
-                    required: ["chartType", "dataKeys", "nameKey", "title"]
-                },
+                responseSchema: CHART_GENERATION_RESPONSE_SCHEMA,
             },
         });
 
       const rawText = response.text.trim();
-      const jsonMatch = rawText.match(/{[\s\S]*}/s);
-
-      if (!jsonMatch) {
-          throw new Error("Generated response does not contain a valid JSON object.");
-      }
       
-      // Define an intermediate type to handle potential inconsistencies from the LLM response.
       type RawChartConfig = Partial<ChartGenerationResult> & { dataKey?: string };
-      const rawConfig = JSON.parse(jsonMatch[0]) as RawChartConfig;
+      const rawConfig = JSON.parse(rawText) as RawChartConfig;
 
-      // Normalize the raw config into the strict ChartGenerationResult type.
-      // This safely handles the legacy `dataKey` field and ensures `dataKeys` is always an array.
       const chartConfig: ChartGenerationResult = {
         chartType: rawConfig.chartType!,
-        // FIX: Replaced undefined 'raw' variable with 'rawConfig'.
         dataKeys: rawConfig.dataKeys || (rawConfig.dataKey ? [rawConfig.dataKey] : []),
         nameKey: rawConfig.nameKey!,
         title: rawConfig.title!,
@@ -321,13 +313,9 @@ OUTPUT REQUIREMENTS:
         completion_tokens: completionTokens
       };
     } catch (e: any) {
-      console.error("Chart generation failed, returning null.", e)
+      console.error("Chart generation failed, returning null.", e);
       return {
-          chartConfig: null,
-          model: modelName,
-          cost: 0,
-          prompt_tokens: 0,
-          completion_tokens: 0,
+          chartConfig: null, model: modelName, cost: 0, prompt_tokens: 0, completion_tokens: 0
       };
     }
   }

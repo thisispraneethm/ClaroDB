@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, ReactNode, useEffect, useState } from 'react';
 import { GeminiProvider } from '../services/llm/geminiProvider';
 import { LLMProvider } from '../services/llm/base';
 import { DemoDataHandler } from '../services/handlers/demoHandler';
@@ -11,6 +11,7 @@ interface ServiceContextType {
   analyzeHandler: FileDataHandler;
   engineerHandler: FileDataHandler;
   enterpriseHandler: EnterpriseDataHandler;
+  isInitialized: boolean;
 }
 
 const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
@@ -23,23 +24,30 @@ const engineerHandler = new FileDataHandler('engineer');
 const enterpriseHandler = new EnterpriseDataHandler();
 
 export const ServiceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [isInitialized, setIsInitialized] = useState(false);
+
   // Centralized initialization for all data handlers. This runs once per application
   // lifecycle, ensuring all database connections are established reliably.
   useEffect(() => {
     const initializeHandlers = async () => {
       try {
-        await demoHandler.connect();
-        await analyzeHandler.connect();
-        await engineerHandler.connect();
-        await enterpriseHandler.connect();
+        await Promise.all([
+          demoHandler.connect(),
+          analyzeHandler.connect(),
+          engineerHandler.connect(),
+          enterpriseHandler.connect()
+        ]);
+        setIsInitialized(true);
         console.log("All data handlers initialized successfully.");
       } catch (error) {
         console.error("Failed to initialize one or more data handlers:", error);
       }
     };
 
-    initializeHandlers();
-  }, []);
+    if (!isInitialized) {
+      initializeHandlers();
+    }
+  }, [isInitialized]);
 
   const value = {
     llmProvider,
@@ -47,6 +55,7 @@ export const ServiceProvider: React.FC<{ children: ReactNode }> = ({ children })
     analyzeHandler,
     engineerHandler,
     enterpriseHandler,
+    isInitialized,
   };
 
   return <ServiceContext.Provider value={value}>{children}</ServiceContext.Provider>;

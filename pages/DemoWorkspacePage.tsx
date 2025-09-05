@@ -12,6 +12,7 @@ const DemoWorkspacePage: React.FC = () => {
   const { 
     demoHandler: handler, 
     llmProvider, 
+    isInitialized,
   } = useServiceContext();
 
   const {
@@ -47,19 +48,21 @@ const DemoWorkspacePage: React.FC = () => {
   }, [conversation, isProcessing]);
 
   useEffect(() => {
-    const fetchSchema = async () => {
-      setIsLoadingSchema(true);
-      try {
-        const s = await handler.getSchemas();
-        setSchemas(s);
-      } catch (e) {
-        console.error("Failed to fetch demo schema", e);
-      } finally {
-        setIsLoadingSchema(false);
-      }
-    };
-    fetchSchema();
-  }, [handler]);
+    if (isInitialized) {
+      const fetchSchema = async () => {
+        setIsLoadingSchema(true);
+        try {
+          const s = await handler.getSchemas();
+          setSchemas(s);
+        } catch (e) {
+          console.error("Failed to fetch demo schema", e);
+        } finally {
+          setIsLoadingSchema(false);
+        }
+      };
+      fetchSchema();
+    }
+  }, [isInitialized, handler]);
 
   const handleExampleQuery = (query: string) => {
     setQuestion(query);

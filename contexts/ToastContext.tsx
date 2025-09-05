@@ -13,8 +13,7 @@ interface ToastContextType {
   removeToast: (id: string) => void;
 }
 
-// FIX: Export ToastContext so it can be used directly in ToastContainer.tsx
-export const ToastContext = createContext<ToastContextType | undefined>(undefined);
+const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -33,10 +32,13 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   return <ToastContext.Provider value={value}>{children}</ToastContext.Provider>;
 };
 
-export const useToast = (): { add: (message: string, type: Toast['type']) => void } => {
+export const useToast = () => {
   const context = useContext(ToastContext);
   if (!context) {
     throw new Error('useToast must be used within a ToastProvider');
   }
-  return { add: context.addToast };
+  return {
+    ...context,
+    add: context.addToast, // provide convenient alias
+  };
 };

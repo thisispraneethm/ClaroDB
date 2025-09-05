@@ -27,7 +27,7 @@ export interface InsightGenerationResult {
 }
 
 export interface ChartGenerationResult {
-  chartType: 'bar' | 'line' | 'pie' | 'scatter' | 'area' | 'composed' | 'stackedBar';
+  chartType: 'bar' | 'line' | 'pie' | 'scatter' | 'area' | 'composed' | 'stackedBar' | 'kpi';
   dataKeys: string[];
   nameKey: string;
   title: string;

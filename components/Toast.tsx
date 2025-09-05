@@ -1,6 +1,5 @@
-import React, { useEffect, useState, useContext } from 'react';
-// FIX: Import ToastContext to access the full context value.
-import { useToast, Toast, ToastContext } from '../contexts/ToastContext';
+import React, { useEffect, useState } from 'react';
+import { useToast, Toast } from '../contexts/ToastContext';
 import { X, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 
 const ToastMessage: React.FC<{ toast: Toast, onRemove: (id: string) => void }> = ({ toast, onRemove }) => {
@@ -53,14 +52,7 @@ const ToastMessage: React.FC<{ toast: Toast, onRemove: (id: string) => void }> =
 };
 
 export const ToastContainer: React.FC = () => {
-  // FIX: The `useToast` hook is designed to only expose `add`. The ToastContainer needs the full context, so we use `useContext` directly.
-  const context = useContext(ToastContext);
-  if (!context) {
-    // This should not happen if ToastContainer is inside ToastProvider
-    return null;
-  }
-  const { toasts, removeToast } = context;
-
+  const { toasts, removeToast } = useToast();
 
   return (
     <div className="fixed bottom-0 right-0 p-4 sm:p-6 space-y-3 z-[100]">
