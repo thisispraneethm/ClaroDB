@@ -26,13 +26,14 @@ const DEMO_DB_NAME = 'clarodb_demo_stable'; // Use a static name to prevent DB l
 
 export class DemoDataHandler extends DataHandler {
     private dbManager: IndexedDBManager | null = null;
+    private alaDb: any | null = null;
 
     constructor() {
         super();
     }
 
     async connect(): Promise<void> {
-        if (this.dbManager) return;
+        if (this.dbManager && this.alaDb) return;
 
         try {
             this.dbManager = new IndexedDBManager(DEMO_DB_NAME);
@@ -43,13 +44,20 @@ export class DemoDataHandler extends DataHandler {
             if (existingData.length === 0) {
               await this.dbManager.addData(DEMO_TABLE_NAME, demoSalesData);
             }
+            
+            // Initialize in-memory AlaSQL database
+            this.alaDb = new alasql.Database();
+            const data = await this.dbManager.getData(DEMO_TABLE_NAME);
+            this.alaDb.exec(`CREATE TABLE ${DEMO_TABLE_NAME}`);
+            (this.alaDb.tables[DEMO_TABLE_NAME] as any).data = data;
+
         } catch (e: any) {
             throw new DataProcessingError(`Failed to initialize IndexedDB for demo: ${e.message}`);
         }
     }
 
     private checkDbManager() {
-        if (!this.dbManager) {
+        if (!this.dbManager || !this.alaDb) {
             throw new Error("Database not initialized. Call connect() first.");
         }
     }
@@ -71,35 +79,11 @@ export class DemoDataHandler extends DataHandler {
         return schemas;
     }
     
-    private parseTablesFromQuery(query: string): Set<string> {
-        const tableRegex = /(?:FROM|JOIN)\s+\[?(\w+)\]?/ig;
-        const tablesInQuery = new Set<string>();
-        let match;
-        while ((match = tableRegex.exec(query)) !== null) {
-            tablesInQuery.add(match[1]);
-        }
-        return tablesInQuery;
-    }
-
     async executeQuery(query: string): Promise<Record<string, any>[]> {
         this.checkDbManager();
         
         try {
-            const tablesInQuery = this.parseTablesFromQuery(query);
-            
-            if (!tablesInQuery.has(DEMO_TABLE_NAME) && tablesInQuery.size === 0) {
-                return alasql(query);
-            }
-
-            // Hybrid approach: Use IndexedDB for storage, and a temporary in-memory AlaSQL DB for querying.
-            const tempDb = new alasql.Database();
-            const data = await this.dbManager.getData(DEMO_TABLE_NAME);
-            
-            tempDb.exec(`CREATE TABLE ${DEMO_TABLE_NAME}`);
-            (tempDb.tables[DEMO_TABLE_NAME] as any).data = data;
-            
-            return tempDb.exec(query);
-
+            return this.alaDb.exec(query);
         } catch (e: any) {
             let friendlyMessage = e.message;
             if (typeof friendlyMessage === 'string') {
@@ -135,6 +119,7 @@ export class DemoDataHandler extends DataHandler {
             await this.dbManager.deleteDatabase();
             this.dbManager = null;
         }
+        this.alaDb = null;
     }
 
     async addCorrection(correction: Correction): Promise<void> {
@@ -144,7 +129,6 @@ export class DemoDataHandler extends DataHandler {
 
     async getCorrections(limit: number): Promise<Correction[]> {
         this.checkDbManager();
-        // FIX: Cast the result from getData to Correction[] as we know the data shape for this store.
         const allCorrections = await this.dbManager.getData(CORRECTIONS_STORE_NAME) as Correction[];
         // Return the most recent 'limit' corrections
         return allCorrections.slice(-limit);

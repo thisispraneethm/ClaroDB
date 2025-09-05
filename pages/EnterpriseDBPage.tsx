@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Container from '../components/Container';
 import { TableSchema, Join, Point } from '../types';
 import { Loader2, Bot, X, Layers, MousePointer2, DatabaseZap, CheckCircle, User, MessageSquare } from 'lucide-react';
-import { useAppContext } from '../contexts/AppContext';
+import { useEnterpriseContext } from '../contexts/EnterpriseContext';
+import { useServiceContext } from '../contexts/ServiceContext';
 import { useAnalysis } from '../hooks/useAnalysis';
 import ChatInput from '../components/ChatInput';
 import { v4 as uuidv4 } from 'uuid';
@@ -16,21 +17,24 @@ const EnterpriseDBPage: React.FC = () => {
   const { 
     llmProvider, 
     enterpriseHandler: handler, 
-    enterpriseConversation, 
-    setEnterpriseConversation,
-    enterpriseHistory,
-    setEnterpriseHistory,
-    enterpriseIsConnected: isConnected,
-    setEnterpriseIsConnected: setIsConnected,
-    enterpriseSchemas: schemas,
-    setEnterpriseSchemas: setSchemas,
-    enterprisePreviewData: previewData,
-    setEnterprisePreviewData: setPreviewData,
-    enterpriseJoins: joins,
-    setEnterpriseJoins: setJoins,
-    enterpriseCardPositions: cardPositions,
-    setEnterpriseCardPositions: setCardPositions
-  } = useAppContext();
+  } = useServiceContext();
+  
+  const {
+    conversation, 
+    setConversation,
+    chatSession,
+    setChatSession,
+    isConnected,
+    setIsConnected,
+    schemas,
+    setSchemas,
+    previewData,
+    setPreviewData,
+    joins,
+    setJoins,
+    cardPositions,
+    setCardPositions
+  } = useEnterpriseContext();
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [question, setQuestion] = useState('');
@@ -44,6 +48,8 @@ const EnterpriseDBPage: React.FC = () => {
   
   const [resultsWidth, setResultsWidth] = useState(600);
   const isResizing = useRef(false);
+  // FIX: Initialize useRef with null to avoid "Expected 1 arguments, but got 0" error.
+  const animationFrameRef = useRef<number | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -63,10 +69,10 @@ const EnterpriseDBPage: React.FC = () => {
   } = useAnalysis({
       handler,
       llmProvider,
-      conversation: enterpriseConversation,
-      setConversation: setEnterpriseConversation,
-      history: enterpriseHistory,
-      setHistory: setEnterpriseHistory
+      conversation,
+      setConversation,
+      chatSession,
+      setChatSession
   });
 
   const compatibleTargets = useMemo(() => {
@@ -86,7 +92,7 @@ const EnterpriseDBPage: React.FC = () => {
 
   useEffect(() => {
     chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
-  }, [enterpriseConversation, isAnalysisLoading]);
+  }, [conversation, isAnalysisLoading]);
 
   const handleConnect = async () => {
     setIsProcessing(true);
@@ -151,7 +157,7 @@ const EnterpriseDBPage: React.FC = () => {
         setDrawingLine(null);
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
-    }, []);
+    }, [handleMouseMove]);
 
     const handleColumnMouseDown = useCallback((table: string, column: string) => {
         setJoinSource({ table, column });
@@ -159,15 +165,21 @@ const EnterpriseDBPage: React.FC = () => {
         window.addEventListener('mouseup', handleMouseUp);
     }, [handleMouseMove, handleMouseUp]);
     
+    const handleColumnMouseUp = useCallback(() => {}, []);
+    const handleColumnLeave = useCallback(() => setJoinTarget(null), []);
+    
     const handleConfirmJoin = (joinType: Join['joinType']) => {
         if (!modalState.details) return;
         setJoins(prev => [...prev, { ...modalState.details!, id: uuidv4(), joinType }]);
         setModalState({ isOpen: false, details: null });
+        setChatSession(null); // Reset chat session as schema/joins changed
     };
 
-    const handleCardDrag = (tableName: string, newPosition: Point) => {
+    const handleCardDrag = useCallback((tableName: string, newPosition: Point) => {
       setCardPositions(prev => ({ ...prev, [tableName]: newPosition }));
-    };
+    }, []);
+
+    const handleDragEnd = useCallback(() => setDraggedTable(null), []);
 
     const handleAutoLayout = () => {
         if (!schemas || Object.keys(schemas).length === 0) return;
@@ -253,7 +265,10 @@ const EnterpriseDBPage: React.FC = () => {
         setCardPositions(newPositions);
     };
 
-  const handleRemoveJoin = (id: string) => setJoins(prev => prev.filter(j => j.id !== id));
+  const handleRemoveJoin = (id: string) => {
+    setJoins(prev => prev.filter(j => j.id !== id));
+    setChatSession(null); // Reset chat session as schema/joins changed
+  }
   
   const handleSend = () => {
     if (!question.trim() || !schemas) return;
@@ -271,26 +286,30 @@ const EnterpriseDBPage: React.FC = () => {
   const canAskQuestion = isConnected && ( (Object.keys(schemas || {}).length === 1) || (Object.keys(schemas || {}).length > 1 && joins.length > 0) );
   const isChatDisabled = isProcessing || isAnalysisLoading || !canAskQuestion;
 
-    const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-      e.preventDefault();
-      isResizing.current = true;
-      document.addEventListener('mousemove', handleResizeMouseMove);
-      document.addEventListener('mouseup', handleResizeMouseUp);
-  }, []);
-
-  const handleResizeMouseMove = useCallback((e: MouseEvent) => {
+    const handleResizeMouseMove = useCallback((e: MouseEvent) => {
       if (!isResizing.current) return;
-      const newWidth = window.innerWidth - e.clientX;
-      if (newWidth > 400 && newWidth < 1200) {
-          setResultsWidth(newWidth);
-      }
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = requestAnimationFrame(() => {
+        const newWidth = window.innerWidth - e.clientX;
+        if (newWidth > 400 && newWidth < 1200) {
+            setResultsWidth(newWidth);
+        }
+      });
   }, []);
 
   const handleResizeMouseUp = useCallback(() => {
       isResizing.current = false;
       document.removeEventListener('mousemove', handleResizeMouseMove);
       document.removeEventListener('mouseup', handleResizeMouseUp);
-  }, []);
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+  }, [handleResizeMouseMove]);
+  
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+      e.preventDefault();
+      isResizing.current = true;
+      document.addEventListener('mousemove', handleResizeMouseMove);
+      document.addEventListener('mouseup', handleResizeMouseUp);
+  }, [handleResizeMouseMove, handleResizeMouseUp]);
 
   if (!isConnected) {
     const inputClasses = "w-full p-2.5 border border-input rounded-md focus:ring-2 focus:ring-ring focus:outline-none transition bg-card";
@@ -395,11 +414,11 @@ const EnterpriseDBPage: React.FC = () => {
                             position={cardPositions[tableName]}
                             onDrag={handleCardDrag}
                             onDragStart={setDraggedTable}
-                            onDragEnd={() => setDraggedTable(null)}
+                            onDragEnd={handleDragEnd}
                             onColumnMouseDown={handleColumnMouseDown}
-                            onColumnMouseUp={() => {}}
+                            onColumnMouseUp={handleColumnMouseUp}
                             onColumnEnter={setJoinTarget}
-                            onColumnLeave={() => setJoinTarget(null)}
+                            onColumnLeave={handleColumnLeave}
                             isSource={joinSource?.table === tableName}
                             sourceColumn={joinSource?.column}
                             compatibleTargets={compatibleTargets}
@@ -418,7 +437,7 @@ const EnterpriseDBPage: React.FC = () => {
                 </div>
             </main>
             
-            {enterpriseConversation.length > 0 && (
+            {conversation.length > 0 && (
                 <aside className="flex-shrink-0 flex animate-scale-in" style={{ width: `${resultsWidth}px` }}>
                     <div onMouseDown={handleResizeMouseDown} className="w-1.5 h-full cursor-col-resize bg-border/50 hover:bg-primary transition-colors duration-200"></div>
                     <div className="flex flex-col flex-1 bg-secondary-background/50 border-l border-border overflow-hidden">
@@ -427,7 +446,7 @@ const EnterpriseDBPage: React.FC = () => {
                         </div>
                         <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
                             <div className="space-y-8">
-                                {enterpriseConversation.map((turn) => (
+                                {conversation.map((turn) => (
                                     <React.Fragment key={turn.id}>
                                     <div className="flex items-start justify-end group"><div className="bg-primary text-primary-foreground rounded-xl rounded-br-none p-4 max-w-2xl shadow-md"><p>{turn.question}</p></div><div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center ml-3 flex-shrink-0"><User size={20} /></div></div>
                                     <div className="flex items-start group"><div className="w-10 h-10 rounded-full bg-background text-primary border border-border flex items-center justify-center mr-3 flex-shrink-0"><Bot size={20} /></div><div className="flex-1 min-w-0"><ConversationTurnDisplay turn={turn} onExecute={executeApprovedSql} onGenerateInsights={generateInsightsForTurn} onGenerateChart={generateChartForTurn} /></div></div>

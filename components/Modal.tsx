@@ -11,28 +11,56 @@ interface ModalProps {
 
 const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer }) => {
   const modalRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedElement = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    const handleClickOutside = (event: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
-        onClose();
-      }
-    };
-
     if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+      previouslyFocusedElement.current = document.activeElement as HTMLElement;
+      
+      const focusableElements = modalRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
 
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+      if (!focusableElements || focusableElements.length === 0) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      
+      firstElement.focus();
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Tab') {
+          if (event.shiftKey) { // Shift + Tab
+            if (document.activeElement === firstElement) {
+              lastElement.focus();
+              event.preventDefault();
+            }
+          } else { // Tab
+            if (document.activeElement === lastElement) {
+              firstElement.focus();
+              event.preventDefault();
+            }
+          }
+        } else if (event.key === 'Escape') {
+          onClose();
+        }
+      };
+      
+      const handleClickOutside = (event: MouseEvent) => {
+        if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+          onClose();
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('mousedown', handleClickOutside);
+
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+        document.removeEventListener('mousedown', handleClickOutside);
+        previouslyFocusedElement.current?.focus();
+      };
+    }
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;

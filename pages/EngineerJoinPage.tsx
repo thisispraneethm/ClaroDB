@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Container from '../components/Container';
 import { TableSchema, Join, Point } from '../types';
 import { Loader2, AlertTriangle, Bot, X, Layers, MousePointer2, FileUp, User, MessageSquare } from 'lucide-react';
-import { useAppContext } from '../contexts/AppContext';
+import { useEngineerContext } from '../contexts/EngineerContext';
+import { useServiceContext } from '../contexts/ServiceContext';
 import { useAnalysis } from '../hooks/useAnalysis';
 import ChatInput from '../components/ChatInput';
 import MultiFileUpload from '../components/MultiFileUpload';
@@ -18,23 +19,26 @@ const EngineerJoinPage: React.FC = () => {
   const { 
     llmProvider, 
     engineerHandler: handler, 
-    engineerConversation, 
-    setEngineerConversation,
-    engineerHistory,
-    setEngineerHistory,
-    engineerFiles: files,
-    setEngineerFiles: setFiles,
-    engineerSchemas: schemas,
-    setEngineerSchemas: setSchemas,
-    engineerPreviewData: previewData,
-    setEngineerPreviewData: setPreviewData,
-    engineerTableNameMap: tableNameMap,
-    setEngineerTableNameMap: setTableNameMap,
-    engineerJoins: joins,
-    setEngineerJoins: setJoins,
-    engineerCardPositions: cardPositions,
-    setEngineerCardPositions: setCardPositions
-  } = useAppContext();
+  } = useServiceContext();
+  
+  const {
+    conversation, 
+    setConversation,
+    chatSession,
+    setChatSession,
+    files,
+    setFiles,
+    schemas,
+    setSchemas,
+    previewData,
+    setPreviewData,
+    tableNameMap,
+    setTableNameMap,
+    joins,
+    setJoins,
+    cardPositions,
+    setCardPositions
+  } = useEngineerContext();
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -49,6 +53,8 @@ const EngineerJoinPage: React.FC = () => {
   
   const [resultsWidth, setResultsWidth] = useState(600);
   const isResizing = useRef(false);
+  // FIX: Initialize useRef with null to avoid "Expected 1 arguments, but got 0" error.
+  const animationFrameRef = useRef<number | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -69,10 +75,10 @@ const EngineerJoinPage: React.FC = () => {
   } = useAnalysis({
       handler,
       llmProvider,
-      conversation: engineerConversation,
-      setConversation: setEngineerConversation,
-      history: engineerHistory,
-      setHistory: setEngineerHistory
+      conversation,
+      setConversation,
+      chatSession,
+      setChatSession,
   });
   
   const compatibleTargets = useMemo(() => {
@@ -93,7 +99,7 @@ const EngineerJoinPage: React.FC = () => {
 
   useEffect(() => {
     chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
-  }, [engineerConversation, isAnalysisLoading]);
+  }, [conversation, isAnalysisLoading]);
 
   const sanitizeTableName = (filename: string) => {
       let sanitized = filename.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_]/g, '_');
@@ -101,19 +107,14 @@ const EngineerJoinPage: React.FC = () => {
       return sanitized || 'unnamed_table';
   }
   
-  const resetWorkspace = () => {
-    setFiles([]);
+  const handleFilesChange = useCallback(async (newFiles: File[]) => {
+    setFiles(newFiles);
+    resetConversation();
     setSchemas(null);
     setPreviewData({});
     setTableNameMap({});
     setJoins([]);
     setCardPositions({});
-    resetConversation();
-  };
-
-  const handleFilesChange = useCallback(async (newFiles: File[]) => {
-    resetWorkspace();
-    setFiles(newFiles);
 
     if (newFiles.length === 0) {
         await handler.loadFiles([]);
@@ -200,23 +201,29 @@ const EngineerJoinPage: React.FC = () => {
         setDrawingLine(null);
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
-    }, []);
+    }, [handleMouseMove]);
 
     const handleColumnMouseDown = useCallback((table: string, column: string) => {
         setJoinSource({ table, column });
         window.addEventListener('mousemove', handleMouseMove);
         window.addEventListener('mouseup', handleMouseUp);
     }, [handleMouseMove, handleMouseUp]);
+
+    const handleColumnMouseUp = useCallback(() => {}, []);
+    const handleColumnLeave = useCallback(() => setJoinTarget(null), []);
     
     const handleConfirmJoin = (joinType: Join['joinType']) => {
         if (!modalState.details) return;
         setJoins(prev => [...prev, { ...modalState.details!, id: uuidv4(), joinType }]);
         setModalState({ isOpen: false, details: null });
+        setChatSession(null); // Reset chat session as schema/joins changed
     };
 
-    const handleCardDrag = (tableName: string, newPosition: Point) => {
+    const handleCardDrag = useCallback((tableName: string, newPosition: Point) => {
       setCardPositions(prev => ({ ...prev, [tableName]: newPosition }));
-    };
+    }, []);
+    
+    const handleDragEnd = useCallback(() => setDraggedTable(null), []);
 
     const handleAutoLayout = () => {
         if (!schemas || Object.keys(schemas).length === 0) return;
@@ -302,7 +309,10 @@ const EngineerJoinPage: React.FC = () => {
         setCardPositions(newPositions);
     };
 
-  const handleRemoveJoin = (id: string) => setJoins(prev => prev.filter(j => j.id !== id));
+  const handleRemoveJoin = (id: string) => {
+    setJoins(prev => prev.filter(j => j.id !== id));
+    setChatSession(null); // Reset chat session as schema/joins changed
+  }
   
   const handleSend = () => {
     if (!question.trim() || !schemas) return;
@@ -320,26 +330,30 @@ const EngineerJoinPage: React.FC = () => {
   const canAskQuestion = (!!schemas && files.length === 1) || (!!schemas && files.length > 1 && joins.length > 0);
   const isChatDisabled = isProcessing || isAnalysisLoading || !canAskQuestion;
 
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-      e.preventDefault();
-      isResizing.current = true;
-      document.addEventListener('mousemove', handleResizeMouseMove);
-      document.addEventListener('mouseup', handleResizeMouseUp);
-  }, []);
-
   const handleResizeMouseMove = useCallback((e: MouseEvent) => {
       if (!isResizing.current) return;
-      const newWidth = window.innerWidth - e.clientX;
-      if (newWidth > 400 && newWidth < 1200) {
-          setResultsWidth(newWidth);
-      }
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = requestAnimationFrame(() => {
+        const newWidth = window.innerWidth - e.clientX;
+        if (newWidth > 400 && newWidth < 1200) {
+            setResultsWidth(newWidth);
+        }
+      });
   }, []);
 
   const handleResizeMouseUp = useCallback(() => {
       isResizing.current = false;
       document.removeEventListener('mousemove', handleResizeMouseMove);
       document.removeEventListener('mouseup', handleResizeMouseUp);
-  }, []);
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+  }, [handleResizeMouseMove]);
+  
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+      e.preventDefault();
+      isResizing.current = true;
+      document.addEventListener('mousemove', handleResizeMouseMove);
+      document.addEventListener('mouseup', handleResizeMouseUp);
+  }, [handleResizeMouseMove, handleResizeMouseUp]);
 
   return (
     <div className="flex flex-col h-full bg-transparent overflow-hidden">
@@ -426,11 +440,11 @@ const EngineerJoinPage: React.FC = () => {
                       position={cardPositions[tableName]}
                       onDrag={handleCardDrag}
                       onDragStart={setDraggedTable}
-                      onDragEnd={() => setDraggedTable(null)}
+                      onDragEnd={handleDragEnd}
                       onColumnMouseDown={handleColumnMouseDown}
-                      onColumnMouseUp={() => {}}
+                      onColumnMouseUp={handleColumnMouseUp}
                       onColumnEnter={setJoinTarget}
-                      onColumnLeave={() => setJoinTarget(null)}
+                      onColumnLeave={handleColumnLeave}
                       isSource={joinSource?.table === tableName}
                       sourceColumn={joinSource?.column}
                       compatibleTargets={compatibleTargets}
@@ -449,7 +463,7 @@ const EngineerJoinPage: React.FC = () => {
           </div>
         </main>
         
-        {engineerConversation.length > 0 && (
+        {conversation.length > 0 && (
           <aside className="flex-shrink-0 flex animate-scale-in" style={{ width: `${resultsWidth}px` }}>
               <div onMouseDown={handleResizeMouseDown} className="w-1.isResizing.current5 h-full cursor-col-resize bg-border/50 hover:bg-primary transition-colors duration-200"></div>
               <div className="flex flex-col flex-1 bg-secondary-background/50 border-l border-border overflow-hidden">
@@ -458,7 +472,7 @@ const EngineerJoinPage: React.FC = () => {
                   </div>
                   <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
                       <div className="space-y-8">
-                          {engineerConversation.map((turn) => (
+                          {conversation.map((turn) => (
                               <React.Fragment key={turn.id}>
                                   <div className="flex items-start justify-end group"><div className="bg-primary text-primary-foreground rounded-xl rounded-br-none p-4 max-w-2xl shadow-md"><p>{turn.question}</p></div><div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center ml-3 flex-shrink-0"><User size={20} /></div></div>
                                   <div className="flex items-start group"><div className="w-10 h-10 rounded-full bg-background text-primary border border-border flex items-center justify-center mr-3 flex-shrink-0"><Bot size={20} /></div><div className="flex-1 min-w-0"><ConversationTurnDisplay turn={turn} onExecute={executeApprovedSql} onGenerateInsights={generateInsightsForTurn} onGenerateChart={generateChartForTurn} /></div></div>

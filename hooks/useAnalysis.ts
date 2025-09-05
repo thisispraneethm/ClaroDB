@@ -1,19 +1,21 @@
-
 import { v4 as uuidv4 } from 'uuid';
 import { TableSchema, ConversationTurn, InsightGenerationResult, ChartGenerationWithMetadataResult, Join } from '../types';
 import { DataHandler } from '../services/handlers/base';
 import { LLMProvider } from '../services/llm/base';
+import { Chat } from '@google/genai';
+import { useToast } from '../contexts/ToastContext';
 
 interface UseAnalysisProps {
     handler: DataHandler;
     llmProvider: LLMProvider;
     conversation: ConversationTurn[];
     setConversation: React.Dispatch<React.SetStateAction<ConversationTurn[]>>;
-    history: { role: string, content: string }[];
-    setHistory: React.Dispatch<React.SetStateAction<{ role: string, content: string }[]>>;
+    chatSession: Chat | null;
+    setChatSession: React.Dispatch<React.SetStateAction<Chat | null>>;
 }
 
-export const useAnalysis = ({ handler, llmProvider, conversation, setConversation, history, setHistory }: UseAnalysisProps) => {
+export const useAnalysis = ({ handler, llmProvider, conversation, setConversation, chatSession, setChatSession }: UseAnalysisProps) => {
+  const toast = useToast();
 
   const askQuestion = async (currentQuestion: string, schemas: TableSchema, joins?: Join[]) => {
     if (!currentQuestion.trim()) return;
@@ -27,19 +29,23 @@ export const useAnalysis = ({ handler, llmProvider, conversation, setConversatio
     setConversation(prev => [...prev, newTurn]);
 
     try {
-      const previewData: Record<string, Record<string, any>[]> = {};
-      for (const tableName of Object.keys(schemas)) {
-        try {
-          previewData[tableName] = await handler.getPreview(tableName, 3);
-        } catch (e) {
-          console.warn(`Could not fetch preview for table ${tableName}:`, e);
-        }
+      let currentChat = chatSession;
+      if (!currentChat) {
+          const previewData: Record<string, Record<string, any>[]> = {};
+          for (const tableName of Object.keys(schemas)) {
+              try {
+                  previewData[tableName] = await handler.getPreview(tableName, 3);
+              } catch (e) {
+                  console.warn(`Could not fetch preview for table ${tableName}:`, e);
+              }
+          }
+          const corrections = await handler.getCorrections(5);
+          currentChat = llmProvider.startChatSession(schemas, handler.getDialect(), previewData, joins, corrections);
+          setChatSession(currentChat);
       }
+      
+      const sqlResult = await llmProvider.continueChat(currentChat, currentQuestion, schemas);
 
-      // Fetch corrections to provide as learning examples
-      const corrections = await handler.getCorrections(5);
-
-      const sqlResult = await llmProvider.generateSQL(currentQuestion, schemas, handler.getDialect(), history, previewData, joins, corrections);
       setConversation(prev => prev.map(t => 
         t.id === turnId ? { ...t, state: 'sql_ready', sqlResult } : t
       ));
@@ -71,11 +77,9 @@ export const useAnalysis = ({ handler, llmProvider, conversation, setConversatio
       // If the user corrected the SQL, save the correction
       if (isCorrection) {
         await handler.addCorrection({ question: turn.question, sql: sqlToExecute });
+        // It's a correction, so we should reset the chat session as its context may be wrong.
+        setChatSession(null);
       }
-
-      // Add the executed query (corrected or not) to the history
-      setHistory(prev => [...prev, { role: 'user', content: turn.question }, { role: 'assistant', content: sqlToExecute }]);
-
     } catch (e: any) {
       setConversation(prev => prev.map(t => 
         t.id === turnId ? { ...t, state: 'error', error: e.message } : t
@@ -97,6 +101,7 @@ export const useAnalysis = ({ handler, llmProvider, conversation, setConversatio
             model: 'N/A', cost: 0, prompt_tokens: 0, completion_tokens: 0
         };
         setConversation(prev => prev.map(t => t.id === turnId ? { ...t, insightsResult: errorResult, insightsLoading: false } : t));
+        toast.add("Failed to generate insights.", "error");
     }
   };
 
@@ -114,12 +119,13 @@ export const useAnalysis = ({ handler, llmProvider, conversation, setConversatio
             chartConfig: null, model: 'N/A', cost: 0, prompt_tokens: 0, completion_tokens: 0
         };
         setConversation(prev => prev.map(t => t.id === turnId ? { ...t, chartResult: errorResult, chartLoading: false } : t));
+        toast.add("Failed to generate chart.", "error");
     }
   };
 
   const resetConversation = () => {
     setConversation([]);
-    setHistory([]);
+    setChatSession(null);
   }
 
   const isProcessing = conversation.some(t => t.state === 'sql_generating' || t.state === 'executing');

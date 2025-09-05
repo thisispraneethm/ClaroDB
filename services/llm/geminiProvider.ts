@@ -1,13 +1,10 @@
-import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, Type, GenerateContentResponse, Chat } from "@google/genai";
 import { LLMProvider } from './base';
 import { SQLGenerationResult, ChartGenerationResult, TableSchema, InsightGenerationResult, ChartGenerationWithMetadataResult, Join } from '../../types';
 import { LLMGenerationError } from '../../utils/exceptions';
 import { config } from '../../config';
 import { enhancePromptWithSchemaAwareness } from '../../utils/promptEnhancer';
 import { Correction } from "../handlers/base";
-
-// Safari-specific fix: Detect Safari to alter the request payload structure.
-const isSafari = typeof navigator !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
 export class GeminiProvider extends LLMProvider {
   private ai: GoogleGenAI;
@@ -24,17 +21,8 @@ export class GeminiProvider extends LLMProvider {
     const completionCost = (completionTokens / 1_000_000) * pricing.completion;
     return promptCost + completionCost;
   }
-
-  async generateSQL(prompt: string, schemas: TableSchema, dialect: string, history: { role: string, content: string }[], dataPreview?: Record<string, Record<string, any>[]>, joins?: Join[], corrections?: Correction[]): Promise<SQLGenerationResult> {
-    const allColumns = Object.values(schemas).flat().map(col => col.name);
-    const typoCorrections = enhancePromptWithSchemaAwareness(prompt, allColumns);
-    
-    let correctionHint = "";
-    if (Object.keys(typoCorrections).length > 0) {
-        const hints = Object.entries(typoCorrections).map(([t, c]) => `'${t}'->'${c}'`).join(", ");
-        correctionHint = `\nHINT: The user may have made typos. Apply these corrections: ${hints}.`;
-    }
-
+  
+  startChatSession(schemas: TableSchema, dialect: string, dataPreview?: Record<string, Record<string, any>[]>, joins?: Join[], corrections?: Correction[]): Chat {
     const schemasStr = Object.entries(schemas)
       .map(([name, cols]) => `- Table '${name}' columns: [${cols.map(c => `${c.name} (${c.type})`).join(', ')}]`)
       .join('\n');
@@ -67,7 +55,9 @@ export class GeminiProvider extends LLMProvider {
     if (dialect === 'alasql') {
         dialectSpecificInstruction = `- IMPORTANT: For the 'alasql' dialect, you MUST adhere to these critical rules:
   - Enclose any column or table name containing spaces or special characters in square brackets (e.g., \`SELECT [Customer Id] FROM [Order Details]\`).
-  - **You MUST NOT use window functions**. Functions like \`LAG()\`, \`LEAD()\`, \`ROW_NUMBER()\`, \`RANK()\`, or any function that uses an \`OVER()\` clause are NOT supported. For complex calculations like year-over-year growth, you must use alternative methods such as self-joins.`;
+  - **You MUST NOT use window functions**. Functions like \`LAG()\`, \`LEAD()\`, \`ROW_NUMBER()\`, \`RANK()\`, or any function that uses an \`OVER()\` clause are NOT supported. For complex calculations like year-over-year growth, you must use alternative methods such as self-joins.
+  - **For date extraction from string columns**, do not use date functions like \`YEAR()\`, \`MONTH()\`, etc. directly, as they can be unreliable with text types. Instead, use the string function \`SUBSTRING\`. For example, to get the year from a 'YYYY-MM-DD' formatted date string in a column named 'order_date', use \`SUBSTRING(order_date, 1, 4)\`.
+  - **When aggregating data (e.g., using GROUP BY) based on a derived value like an extracted year**, you MUST repeat the full function in the GROUP BY clause. For instance, if you \`SELECT SUBSTRING(date_col, 1, 4) AS year\`, you must then \`GROUP BY SUBSTRING(date_col, 1, 4)\`. Do NOT group by the original column (e.g., \`GROUP BY date_col\`). The same rule applies to ORDER BY.`;
     }
 
     let userCorrectionsStr = "";
@@ -129,7 +119,7 @@ ORDER BY
 ---
 `;
 
-    const systemPrompt = `You are a precise, world-class SQL generator. Your sole purpose is to translate a natural language question into a single, valid SQL query for the ${dialect} dialect.
+    const systemInstruction = `You are a precise, world-class SQL generator. Your sole purpose is to translate a natural language question into a single, valid SQL query for the ${dialect} dialect.
 Constraints:
 - Return ONLY the raw SQL query. Do not include explanations, comments, or markdown formatting like \`\`\`sql.
 - Your entire response must be only the SQL query.
@@ -145,34 +135,29 @@ ${userCorrectionsStr}
 ${fewShotExamples}
 Schema:
 ${schemasStr}
-${previewStr}
-${correctionHint}`;
+${previewStr}`;
 
-    const historyStr = history.map(h => {
-        return h.role === 'user' 
-            ? `PREVIOUS QUESTION: "${h.content}"`
-            : `PREVIOUS SQL:\n${h.content}`;
-    }).join('\n\n');
+    return this.ai.chats.create({
+      model: 'gemini-2.5-flash',
+      config: { systemInstruction }
+    });
+  }
 
-    const currentQuestionStr = `--- Current Question ---\nBased on the conversation so far, generate a SQL query for this question: ${prompt}`;
-
-    // Safari-specific fix: Send content as an array of strings to avoid ReadableStream issue.
-    const contentsPayload = isSafari
-        ? [
-            systemPrompt,
-            ...(historyStr ? [`--- Conversation History ---\n${historyStr}`] : []),
-            currentQuestionStr
-          ]
-        : `${systemPrompt}\n\n${historyStr ? `--- Conversation History ---\n${historyStr}\n\n` : ''}${currentQuestionStr}`;
+  async continueChat(chat: Chat, prompt: string, schemas: TableSchema): Promise<SQLGenerationResult> {
+    const allColumns = Object.values(schemas).flat().map(col => col.name);
+    const typoCorrections = enhancePromptWithSchemaAwareness(prompt, allColumns);
+    
+    let correctionHint = "";
+    if (Object.keys(typoCorrections).length > 0) {
+        const hints = Object.entries(typoCorrections).map(([t, c]) => `'${t}'->'${c}'`).join(", ");
+        correctionHint = ` (HINT: The user may have made typos. Apply these corrections: ${hints}.)`;
+    }
+    
+    const finalPrompt = `Based on the conversation so far, generate a SQL query for this question: ${prompt}${correctionHint}`;
 
     try {
       const modelName = 'gemini-2.5-flash';
-      
-      const response: GenerateContentResponse = await this.ai.models.generateContent({
-        model: modelName,
-        contents: contentsPayload,
-      });
-      
+      const response = await chat.sendMessage({ message: finalPrompt });
       const sqlQuery = response.text.replace(/```sql/g, '').replace(/```/g, '').trim();
 
       const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
@@ -199,6 +184,7 @@ ${correctionHint}`;
     }
   }
 
+
   async generateInsights(question: string, data: Record<string, any>[]): Promise<InsightGenerationResult> {
     const dataPreview = JSON.stringify(data.slice(0, 50), null, 2);
     
@@ -209,15 +195,18 @@ ${correctionHint}`;
 - Use markdown for formatting (e.g., lists, bold text).`;
     
     const userPrompt = `Context: The user asked "${question}".\nResult sample (first 50 rows):\n${dataPreview}`;
-    
-    const contentsPayload = isSafari ? [systemInstruction, userPrompt] : `${systemInstruction}\n\n${userPrompt}`;
 
     try {
       const modelName = 'gemini-2.5-flash';
 
+      // FIX: The `generateContent` API uses `config.systemInstruction` for system-level prompts.
+      // The `contents` property should be the user prompt. This resolves the type error.
       const response = await this.ai.models.generateContent({
         model: modelName,
-        contents: contentsPayload,
+        contents: userPrompt,
+        config: {
+          systemInstruction,
+        },
       });
       
       const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
@@ -271,13 +260,14 @@ OUTPUT REQUIREMENTS:
     
     const userPrompt = "Generate the chart configuration JSON for the provided context.";
 
-    const contentsPayload = isSafari ? [systemPrompt, userPrompt] : `${systemPrompt}\n\n${userPrompt}`;
-
     try {
+        // FIX: The `generateContent` API uses `config.systemInstruction` for system-level prompts.
+        // The `contents` property should be the user prompt. This resolves the type error.
         const response = await this.ai.models.generateContent({
             model: modelName,
-            contents: contentsPayload,
+            contents: userPrompt,
             config: {
+                systemInstruction: systemPrompt,
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
@@ -298,26 +288,30 @@ OUTPUT REQUIREMENTS:
             },
         });
 
-      const jsonStr = response.text.trim();
-      // FIX: The model might return a slightly malformed JSON. Find the start and end of the JSON object.
-      const jsonStart = jsonStr.indexOf('{');
-      const jsonEnd = jsonStr.lastIndexOf('}');
-      if (jsonStart === -1 || jsonEnd === -1) {
-          throw new Error("Generated response is not valid JSON.");
-      }
-      const correctedJsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
+      const rawText = response.text.trim();
+      const jsonMatch = rawText.match(/{[\s\S]*}/s);
 
-      const chartConfig = JSON.parse(correctedJsonStr) as ChartGenerationResult;
+      if (!jsonMatch) {
+          throw new Error("Generated response does not contain a valid JSON object.");
+      }
+      
+      // Define an intermediate type to handle potential inconsistencies from the LLM response.
+      type RawChartConfig = Partial<ChartGenerationResult> & { dataKey?: string };
+      const rawConfig = JSON.parse(jsonMatch[0]) as RawChartConfig;
+
+      // Normalize the raw config into the strict ChartGenerationResult type.
+      // This safely handles the legacy `dataKey` field and ensures `dataKeys` is always an array.
+      const chartConfig: ChartGenerationResult = {
+        chartType: rawConfig.chartType!,
+        // FIX: Replaced undefined 'raw' variable with 'rawConfig'.
+        dataKeys: rawConfig.dataKeys || (rawConfig.dataKey ? [rawConfig.dataKey] : []),
+        nameKey: rawConfig.nameKey!,
+        title: rawConfig.title!,
+        composedTypes: rawConfig.composedTypes,
+      };
       const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
       const completionTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
       const cost = this.calculateCost(modelName, promptTokens, completionTokens);
-      
-      // Backwards compatibility for models that might still return dataKey
-      // @ts-ignore
-      if (chartConfig.dataKey && !chartConfig.dataKeys) {
-        // @ts-ignore
-        chartConfig.dataKeys = [chartConfig.dataKey];
-      }
 
       return {
         chartConfig,

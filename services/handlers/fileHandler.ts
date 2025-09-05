@@ -16,6 +16,7 @@ export class FileDataHandler extends DataHandler {
     private dbName: string;
     private tableNames: string[] = [];
     private workspaceId: string;
+    private alaDb: any | null = null;
 
     constructor(workspaceId: string) {
         super();
@@ -37,6 +38,7 @@ export class FileDataHandler extends DataHandler {
     async loadFiles(sources: FileSource[]): Promise<void> {
         this.checkDbManager();
         this.tableNames = [];
+        this.alaDb = null; // Reset AlaSQL instance on new file load
 
         try {
             if (sources.length === 0) {
@@ -44,6 +46,7 @@ export class FileDataHandler extends DataHandler {
                  return;
             }
             
+            this.alaDb = new alasql.Database();
             const workingStoreNames = sources.map(s => s.name);
             const originalStoreNames = sources.map(s => `${s.name}_original`);
             const storeNames = [...workingStoreNames, ...originalStoreNames, CORRECTIONS_STORE_NAME];
@@ -97,10 +100,14 @@ export class FileDataHandler extends DataHandler {
                     throw new DataProcessingError(`Could not extract any data from '${source.file.name}'. The file may be empty or in an unsupported format.`);
                 }
                 
-                // Store both the original data and the working copy. Sampling will affect the working copy only.
+                // Store original data for sampling, and working copy for querying
                 await this.dbManager.addData(`${source.name}_original`, data);
                 await this.dbManager.addData(source.name, data);
                 this.tableNames.push(source.name);
+                
+                // Populate AlaSQL instance
+                this.alaDb.exec(`CREATE TABLE [${source.name}]`);
+                (this.alaDb.tables[source.name] as any).data = data;
             }
         } catch (e: any) {
             await this.terminate();
@@ -127,8 +134,7 @@ export class FileDataHandler extends DataHandler {
         let sampledData: Record<string, any>[];
 
         if (method === 'random') {
-            // AlaSQL's TABLESAMPLE is not supported. Implement random sampling using Fisher-Yates shuffle.
-            const shuffled = [...original]; // Create a shallow copy
+            const shuffled = [...original]; 
             for (let i = shuffled.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -155,18 +161,38 @@ export class FileDataHandler extends DataHandler {
         }
         
         await this.dbManager.addData(tableName, sampledData);
+        // Update the in-memory AlaSQL database as well
+        if (this.alaDb && this.alaDb.tables[tableName]) {
+            (this.alaDb.tables[tableName] as any).data = sampledData;
+        }
         return true; // Sampled
     }
 
     async getSchemas(): Promise<TableSchema> {
         this.checkDbManager();
         const schemas: TableSchema = {};
+    
         for (const tableName of this.tableNames) {
-            const firstRecord = await this.dbManager.getPreview(tableName, 1);
-            if (firstRecord.length > 0) {
-                 schemas[tableName] = Object.keys(firstRecord[0]).map(key => ({
-                    name: key,
-                    type: typeof firstRecord[0][key] === 'number' ? 'NUMBER' : 'TEXT',
+            const sample = await this.dbManager.getPreview(tableName, 50);
+            if (sample.length > 0) {
+                const columnTypes: Record<string, 'NUMBER' | 'TEXT'> = {};
+                const columns = Object.keys(sample[0]);
+    
+                for (const col of columns) {
+                    // Default to NUMBER, but switch to TEXT if any non-numeric value is found
+                    columnTypes[col] = 'NUMBER';
+                    for (const row of sample) {
+                        const value = row[col];
+                        if (value !== null && value !== '' && isNaN(Number(value))) {
+                            columnTypes[col] = 'TEXT';
+                            break; // Once it's TEXT, no need to check further for this column
+                        }
+                    }
+                }
+    
+                schemas[tableName] = columns.map(col => ({
+                    name: col,
+                    type: columnTypes[col],
                 }));
             } else {
                 schemas[tableName] = [];
@@ -179,40 +205,14 @@ export class FileDataHandler extends DataHandler {
         this.checkDbManager();
         return this.dbManager.getPreview(tableName, rowCount);
     }
-    
-    private parseTablesFromQuery(query: string): Set<string> {
-        const tableRegex = /(?:FROM|JOIN)\s+\[?(\w+)\]?/ig;
-        const tablesInQuery = new Set<string>();
-        let match;
-        while ((match = tableRegex.exec(query)) !== null) {
-            tablesInQuery.add(match[1]);
-        }
-        return tablesInQuery;
-    }
 
     async executeQuery(query: string): Promise<Record<string, any>[]> {
         this.checkDbManager();
+        if (!this.alaDb) {
+            throw new QueryExecutionError("In-memory database not ready. Please load files first.");
+        }
         try {
-            const tablesInQuery = this.parseTablesFromQuery(query);
-            if (tablesInQuery.size === 0) return alasql(query);
-
-            const tempDb = new alasql.Database();
-            for (const tableNameFromQuery of tablesInQuery) {
-                // Perform a case-insensitive lookup to find the actual table name in IndexedDB.
-                const actualTableName = this.tableNames.find(
-                    storedName => storedName.toLowerCase() === tableNameFromQuery.toLowerCase()
-                );
-
-                if (actualTableName) {
-                    const data = await this.dbManager.getData(actualTableName);
-                    tempDb.exec(`CREATE TABLE [${tableNameFromQuery}]`);
-                    if (data) {
-                        (tempDb.tables[tableNameFromQuery] as any).data = data;
-                    }
-                }
-            }
-            
-            return tempDb.exec(query);
+            return this.alaDb.exec(query);
         } catch (e: any) {
             let friendlyMessage = e.message;
             if (typeof friendlyMessage === 'string') {
@@ -240,6 +240,7 @@ export class FileDataHandler extends DataHandler {
             await this.dbManager.deleteDatabase();
             this.dbManager = null;
             this.tableNames = [];
+            this.alaDb = null;
         }
     }
 
@@ -250,7 +251,6 @@ export class FileDataHandler extends DataHandler {
 
     async getCorrections(limit: number): Promise<Correction[]> {
         this.checkDbManager();
-        // FIX: Cast the result from getData to Correction[] as we know the data shape for this store.
         const allCorrections = await this.dbManager.getData(CORRECTIONS_STORE_NAME) as Correction[];
         return allCorrections.slice(-limit);
     }

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Container from '../components/Container';
 import FileUpload from '../components/FileUpload';
-import { TableSchema } from '../types';
 import { Loader2, AlertTriangle, Bot, Layers, FileUp, User } from 'lucide-react';
-import { useAppContext } from '../contexts/AppContext';
+import { useAnalyzeContext } from '../contexts/AnalyzeContext';
+import { useServiceContext } from '../contexts/ServiceContext';
 import { useAnalysis } from '../hooks/useAnalysis';
 import ChatInput from '../components/ChatInput';
 import DataPreview from '../components/DataPreview';
@@ -15,19 +15,22 @@ const AnalyzePage: React.FC = () => {
   const { 
     llmProvider, 
     analyzeHandler: handler, 
-    analyzeConversation, 
-    setAnalyzeConversation,
-    analyzeHistory,
-    setAnalyzeHistory,
-    analyzeFile: file,
-    setAnalyzeFile: setFile,
-    analyzeSchemas: schemas,
-    setAnalyzeSchemas: setSchemas,
-    analyzePreviewData: previewData,
-    setAnalyzePreviewData: setPreviewData,
-    analyzeIsSampled: isSampled,
-    setAnalyzeIsSampled: setIsSampled
-  } = useAppContext();
+  } = useServiceContext();
+
+  const {
+    conversation, 
+    setConversation,
+    chatSession,
+    setChatSession,
+    file,
+    setFile,
+    schemas,
+    setSchemas,
+    previewData,
+    setPreviewData,
+    isSampled,
+    setIsSampled
+  } = useAnalyzeContext();
 
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -43,17 +46,17 @@ const AnalyzePage: React.FC = () => {
   } = useAnalysis({
       handler,
       llmProvider,
-      conversation: analyzeConversation,
-      setConversation: setAnalyzeConversation,
-      history: analyzeHistory,
-      setHistory: setAnalyzeHistory
+      conversation,
+      setConversation,
+      chatSession,
+      setChatSession,
   });
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
-  }, [analyzeConversation, isAnalysisLoading]);
+  }, [conversation, isAnalysisLoading]);
 
   const refreshDataViews = async (tableName: string) => {
       const preview = await handler.getPreview(tableName, 10);
@@ -97,6 +100,8 @@ const AnalyzePage: React.FC = () => {
         const wasSampled = await handler.applySampling(tableName, method, size, column);
         await refreshDataViews(tableName);
         setIsSampled(wasSampled);
+        // Reset chat session since data has changed
+        setChatSession(null);
     } catch (e: any) {
         setPageError(`Sampling failed: ${e.message}`);
     } finally {
@@ -167,9 +172,9 @@ const AnalyzePage: React.FC = () => {
               </>
             )}
           
-          {analyzeConversation.length > 0 && (
+          {conversation.length > 0 && (
             <div className="space-y-8 pt-6 border-t border-border">
-              {analyzeConversation.map((turn) => (
+              {conversation.map((turn) => (
                 <React.Fragment key={turn.id}>
                   <div className="flex items-start justify-end group">
                     <div className="bg-primary text-primary-foreground rounded-xl rounded-br-none p-4 max-w-2xl shadow-md"><p>{turn.question}</p></div>
