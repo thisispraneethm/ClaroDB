@@ -38,7 +38,7 @@ const AboutPage: React.FC = () => {
               </div>
               <div>
                 <p className="text-md text-text-secondary leading-relaxed">
-                  At ClaroDB, we value your privacy above all else. Our architecture is built on a simple but powerful promise: **your data never leaves your computer**. All file processing, storage, and SQL execution happens locally within your browser. We do not have servers that see, store, or interact with your raw data.
+                  At ClaroDB, we value your privacy above all else. Our architecture is built on a simple but powerful promise: <strong className="font-bold text-text uppercase">your data never leaves your computer</strong>. All file processing, storage, and SQL execution happens locally within your browser. We do not have servers that see, store, or interact with your raw data.
                 </p>
                 <ul className="mt-4 space-y-2 text-sm text-text-secondary">
                   <li className="flex items-start"><Cpu size={16} className="mr-3 mt-1 text-primary flex-shrink-0" /><span><strong>Client-Side Processing:</strong> Files are parsed and queried directly on your machine. The only data sent to the cloud is the anonymous table schema (column names and types) and your natural language question to the AI model. Your raw data rows are never sent.</span></li>
