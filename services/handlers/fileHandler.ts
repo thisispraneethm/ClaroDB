@@ -35,6 +35,67 @@ export class FileDataHandler extends DataHandler {
         }
     }
 
+    /**
+     * Sanitizes data by identifying columns that contain numeric-like strings
+     * (e.g., "$1,234.56") and converting them to actual numbers.
+     * This is crucial for ensuring SQL aggregations work correctly.
+     */
+    private _sanitizeData(data: Record<string, any>[]): Record<string, any>[] {
+        if (data.length === 0) return data;
+
+        const columns = Object.keys(data[0]);
+        const columnsToSanitize: Set<string> = new Set();
+
+        for (const col of columns) {
+            let numericLikeCount = 0;
+            let nonNumericCount = 0;
+            const sampleSize = Math.min(data.length, 50);
+
+            for (let i = 0; i < sampleSize; i++) {
+                const value = data[i][col];
+                if (value === null || String(value).trim() === '') continue;
+
+                // Check if the string, after removing common symbols, is a number.
+                const cleanedValue = String(value).replace(/[\$,]/g, '');
+                if (cleanedValue.trim() !== '' && !isNaN(Number(cleanedValue))) {
+                    numericLikeCount++;
+                } else {
+                    nonNumericCount++;
+                }
+            }
+
+            // Heuristic: If over 80% of sampled, non-empty values are numeric-like,
+            // we'll attempt to sanitize the entire column.
+            if (numericLikeCount > 0 && numericLikeCount / (numericLikeCount + nonNumericCount) > 0.8) {
+                columnsToSanitize.add(col);
+            }
+        }
+
+        if (columnsToSanitize.size === 0) {
+            return data; // No sanitization needed
+        }
+
+        // Apply the transformation to the entire dataset
+        return data.map(row => {
+            const newRow = { ...row };
+            for (const col of columnsToSanitize) {
+                const value = newRow[col];
+                if (value === null || value === undefined) {
+                    newRow[col] = null;
+                    continue;
+                }
+                
+                const cleanedValue = String(value).replace(/[\$,]/g, '');
+                if (cleanedValue.trim() === '' || isNaN(Number(cleanedValue))) {
+                    newRow[col] = null; // Set values that can't be parsed to null
+                } else {
+                    newRow[col] = Number(cleanedValue);
+                }
+            }
+            return newRow;
+        });
+    }
+
     async loadFiles(sources: FileSource[]): Promise<void> {
         this.checkDbManager();
         this.tableNames = [];
@@ -85,11 +146,9 @@ export class FileDataHandler extends DataHandler {
                     }
                 } else {
                     data = tryParseStructured(fileContent);
-                    // If it's a CSV and parsing fails, it's an error. Don't fall back to unstructured text.
                     if (data === null && extension === 'csv') {
                         throw new DataProcessingError(`Failed to parse CSV file '${source.file.name}'. Please ensure it has a header row and uses a standard delimiter (like comma or tab).`);
                     }
-                    // For other file types (like .txt), if parsing fails, fall back to unstructured.
                     if (data === null) {
                         const lines = fileContent.replace(/\r\n/g, '\n').split('\n').filter(l => l.trim() !== '');
                         data = lines.map(line => ({ "text_line": line }));
@@ -100,14 +159,14 @@ export class FileDataHandler extends DataHandler {
                     throw new DataProcessingError(`Could not extract any data from '${source.file.name}'. The file may be empty or in an unsupported format.`);
                 }
                 
-                // Store original data for sampling, and working copy for querying
-                await this.dbManager.addData(`${source.name}_original`, data);
-                await this.dbManager.addData(source.name, data);
+                const sanitizedData = this._sanitizeData(data);
+
+                await this.dbManager.addData(`${source.name}_original`, sanitizedData);
+                await this.dbManager.addData(source.name, sanitizedData);
                 this.tableNames.push(source.name);
                 
-                // Populate AlaSQL instance
                 this.alaDb.exec(`CREATE TABLE [${source.name}]`);
-                (this.alaDb.tables[source.name] as any).data = data;
+                (this.alaDb.tables[source.name] as any).data = sanitizedData;
             }
         } catch (e: any) {
             await this.terminate();
@@ -161,7 +220,6 @@ export class FileDataHandler extends DataHandler {
         }
         
         await this.dbManager.addData(tableName, sampledData);
-        // Update the in-memory AlaSQL database as well
         if (this.alaDb && this.alaDb.tables[tableName]) {
             (this.alaDb.tables[tableName] as any).data = sampledData;
         }
@@ -179,13 +237,12 @@ export class FileDataHandler extends DataHandler {
                 const columns = Object.keys(sample[0]);
     
                 for (const col of columns) {
-                    // Default to NUMBER, but switch to TEXT if any non-numeric value is found
                     columnTypes[col] = 'NUMBER';
                     for (const row of sample) {
                         const value = row[col];
-                        if (value !== null && value !== '' && isNaN(Number(value))) {
-                            columnTypes[col] = 'TEXT';
-                            break; // Once it's TEXT, no need to check further for this column
+                        if (typeof value !== 'number' && value !== null) {
+                             columnTypes[col] = 'TEXT';
+                             break;
                         }
                     }
                 }

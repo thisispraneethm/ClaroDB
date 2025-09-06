@@ -49,7 +49,7 @@ const EnterpriseDBPage: React.FC = () => {
   const [resultsWidth, setResultsWidth] = useState(600);
   const isResizing = useRef(false);
   // FIX: Initialize useRef with null to avoid "Expected 1 arguments, but got 0" error.
-  const animationFrameRef = useRef<number | null>(null);
+  const animationFrameIdRef = useRef<number | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -288,8 +288,8 @@ const EnterpriseDBPage: React.FC = () => {
 
     const handleResizeMouseMove = useCallback((e: MouseEvent) => {
       if (!isResizing.current) return;
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = requestAnimationFrame(() => {
+      if (animationFrameIdRef.current) cancelAnimationFrame(animationFrameIdRef.current);
+      animationFrameIdRef.current = requestAnimationFrame(() => {
         const newWidth = window.innerWidth - e.clientX;
         if (newWidth > 400 && newWidth < 1200) {
             setResultsWidth(newWidth);
@@ -301,7 +301,7 @@ const EnterpriseDBPage: React.FC = () => {
       isResizing.current = false;
       document.removeEventListener('mousemove', handleResizeMouseMove);
       document.removeEventListener('mouseup', handleResizeMouseUp);
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (animationFrameIdRef.current) cancelAnimationFrame(animationFrameIdRef.current);
   }, [handleResizeMouseMove]);
   
   const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {

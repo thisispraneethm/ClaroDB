@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -77,90 +76,6 @@ const MetadataDisplay: React.FC<{
       <span>Cost: <b className="text-text">${cost.toFixed(6)}</b></span>
     </div>
   );
-};
-
-const ChartControls: React.FC<{
-    config: ChartGenerationResult;
-    setConfig: React.Dispatch<React.SetStateAction<ChartGenerationResult | null>>;
-    numericColumns: string[];
-    categoricalColumns: string[];
-    allColumns: string[];
-}> = ({ config, setConfig, numericColumns, categoricalColumns, allColumns }) => {
-
-    const handleChartTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const newType = e.target.value as ChartGenerationResult['chartType'];
-        setConfig(prev => {
-            if (!prev) return null;
-            let newDataKeys = prev.dataKeys;
-            if (newType === 'pie' && prev.dataKeys.length > 1) {
-                newDataKeys = [prev.dataKeys[0]];
-            }
-            return { ...prev, chartType: newType, dataKeys: newDataKeys };
-        });
-    };
-
-    const handleXAxisChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        setConfig(prev => prev ? { ...prev, nameKey: e.target.value } : null);
-    };
-
-    const handleYAxisChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const newYKey = e.target.value;
-        setConfig(prev => {
-            if (!prev) return null;
-            const newConfig: ChartGenerationResult = { ...prev, dataKeys: [newYKey] };
-            // If chart was multi-series, simplify it to a basic bar chart
-            if (prev.chartType === 'stackedBar' || prev.chartType === 'composed') {
-                newConfig.chartType = 'bar';
-            }
-            return newConfig;
-        });
-    };
-
-    const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setConfig(prev => prev ? { ...prev, title: e.target.value } : null);
-    };
-
-    const xAxisOptions = useMemo(() => {
-        if (config.chartType === 'scatter') return numericColumns;
-        if (config.chartType === 'pie') return categoricalColumns;
-        return allColumns;
-    }, [config.chartType, numericColumns, categoricalColumns, allColumns]);
-    
-    const controlClass = "w-full p-2 text-sm border border-input rounded-md focus:ring-1 focus:ring-ring focus:outline-none transition bg-card";
-
-    return (
-        <div className="p-3 bg-secondary-background/70 border-b border-black/5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-center">
-            <div>
-                 <label className="block text-xs font-medium text-text-secondary mb-1">Chart Title</label>
-                 <input type="text" value={config.title} onChange={handleTitleChange} className={controlClass} />
-            </div>
-            <div>
-                 <label className="block text-xs font-medium text-text-secondary mb-1">Chart Type</label>
-                 <select value={config.chartType} onChange={handleChartTypeChange} className={controlClass}>
-                    <option value="bar">Bar</option>
-                    <option value="line">Line</option>
-                    <option value="area">Area</option>
-                    <option value="pie">Pie</option>
-                    <option value="scatter">Scatter</option>
-                    <option value="composed">Composed</option>
-                    <option value="stackedBar">Stacked Bar</option>
-                 </select>
-            </div>
-            <div>
-                 <label className="block text-xs font-medium text-text-secondary mb-1">{config.chartType === 'pie' ? 'Label' : 'X-Axis'}</label>
-                 <select value={config.nameKey} onChange={handleXAxisChange} className={controlClass}>
-                     {xAxisOptions.map(col => <option key={col} value={col}>{col}</option>)}
-                 </select>
-            </div>
-            <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">{config.chartType === 'pie' ? 'Value' : 'Y-Axis'}</label>
-                <select value={config.dataKeys?.[0] || ''} onChange={handleYAxisChange} className={controlClass} disabled={numericColumns.length === 0}>
-                    {numericColumns.length === 0 && <option>No numeric columns</option>}
-                    {numericColumns.map(col => <option key={col} value={col}>{col}</option>)}
-                </select>
-            </div>
-        </div>
-    );
 };
 
 const ExportDropdown: React.FC<{
@@ -411,15 +326,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
   
   const [activeTab, setActiveTab] = useState<Tab>('table');
   const [currentPage, setCurrentPage] = useState(1);
-  const [editableChartConfig, setEditableChartConfig] = useState<ChartGenerationResult | null>(null);
   
   const prevTurnRef = useRef<ConversationTurn | null>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const insightsContainerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setEditableChartConfig(turn.chartResult?.chartConfig || null);
-  }, [turn.chartResult]);
   
   useEffect(() => {
     const prevTurn = prevTurnRef.current;
@@ -446,12 +356,11 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
   const hasInsights = !!insightsResult && insightsResult.insights !== "No insights generated.";
   const hasChart = chartResult?.chartConfig !== null && chartResult?.chartConfig !== undefined;
 
-  const { numericColumns, categoricalColumns, allColumns } = useMemo(() => {
+  const { numericColumns, allColumns } = useMemo(() => {
         if (!data || data.length === 0) {
-            return { numericColumns: [], categoricalColumns: [], allColumns: [] };
+            return { numericColumns: [], allColumns: [] };
         }
         const numeric: string[] = [];
-        const categorical: string[] = [];
         const all = Object.keys(data[0]);
         
         for (const header of all) {
@@ -464,11 +373,9 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
 
             if (isNumeric) {
                 numeric.push(header);
-            } else {
-                categorical.push(header);
             }
         }
-      return { numericColumns: numeric, categoricalColumns: categorical, allColumns: all };
+      return { numericColumns: numeric, allColumns: all };
     }, [data]);
     
     // Coerce numeric string values to numbers for robust charting
@@ -548,7 +455,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
       const svgElement = chartContainerRef.current.querySelector('svg');
       if (!svgElement) return;
 
-      const title = editableChartConfig?.title || 'chart';
+      const title = turn.chartResult?.chartConfig?.title || 'chart';
       const filename = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
       const a = document.createElement('a');
 
@@ -599,82 +506,58 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
       return <div className="text-center py-8 text-text-secondary flex items-center justify-center"><Loader2 size={20} className="animate-spin mr-2" /> Generating chart...</div>;
     }
 
-    if (!editableChartConfig || !data || data.length === 0) {
-        let reason = "The AI couldn't determine a suitable chart for this data.";
-        if (!data || data.length === 0) {
-            reason = "There is no data to visualize.";
-        } else if (Object.keys(data[0] || {}).length < 1) {
-            reason = "The query result has no columns to visualize.";
-        }
-        
+    const chartConfig = turn.chartResult?.chartConfig;
+    const canDisplayContent = data.length > 0 && allColumns.length > 0;
+
+    if (!canDisplayContent) {
         return (
-            <div className="bg-secondary-background rounded-lg border border-border">
-                {chartResult && (
-                  <div className="px-4 py-2 border-b border-border">
-                    <MetadataDisplay
-                        label="Chart Generation"
-                        model={chartResult.model}
-                        cost={chartResult.cost}
-                        prompt_tokens={chartResult.prompt_tokens}
-                        completion_tokens={chartResult.completion_tokens}
-                    />
-                  </div>
-                )}
-                <div className="text-center p-8 text-text-secondary">
-                    <p className="font-semibold text-text">Chart could not be generated.</p>
-                    <p className="text-sm mt-1">{reason}</p>
-                </div>
+            <div className="bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card text-center p-8 text-text-secondary">
+                <p className="font-semibold text-text">No data to visualize.</p>
+                <p className="text-sm mt-1">The query returned no results.</p>
             </div>
         );
     }
-
-    const configToRender = { ...editableChartConfig };
-    let wasOverridden = false;
-    if (configToRender.chartType === 'pie' && data.length > 7) {
-        configToRender.chartType = 'bar';
-        wasOverridden = true;
-    }
-
-    const { chartType } = configToRender;
-    const ChartComponent = CHART_COMPONENTS[chartType];
-
+    
     return (
-      <div className="w-full bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card">
-        <div className="px-4 py-2 border-b border-black/5">
-          <MetadataDisplay
-              label="Chart Generation"
-              model={chartResult!.model}
-              cost={chartResult!.cost}
-              prompt_tokens={chartResult!.prompt_tokens}
-              completion_tokens={chartResult!.completion_tokens}
-          />
+        <div className="w-full bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card">
+            {turn.chartResult && turn.chartResult.model !== 'local' && (
+                <div className="px-4 py-2 border-b border-black/5">
+                    <MetadataDisplay
+                        label="Chart Generation"
+                        model={turn.chartResult.model}
+                        cost={turn.chartResult.cost}
+                        prompt_tokens={turn.chartResult.prompt_tokens}
+                        completion_tokens={turn.chartResult.completion_tokens}
+                    />
+                </div>
+            )}
+            
+            {!chartConfig ? (
+                <div className="h-96 w-full p-4 flex flex-col items-center justify-center text-center text-text-secondary">
+                    <BarChart2 size={32} className="mb-4 text-primary/50" />
+                    <p className="font-semibold text-text">Chart not generated.</p>
+                    <p className="text-sm mt-1">Click the "Generate Chart" button to automatically create a bar chart.</p>
+                </div>
+            ) : (
+                (() => {
+                    // Always render a bar chart, as requested.
+                    const ChartComponent = CHART_COMPONENTS['bar'];
+
+                    return (
+                        <div className="h-96 w-full p-4" ref={chartContainerRef}>
+                            <h4 className="text-center font-semibold mb-4 text-text">{chartConfig.title}</h4>
+                            <ResponsiveContainer>
+                               {ChartComponent ? (
+                                <ChartComponent data={chartReadyData} config={chartConfig} />
+                              ) : (
+                                <div className="text-center py-8 text-text-secondary">Bar chart component is unavailable.</div>
+                              )}
+                            </ResponsiveContainer>
+                        </div>
+                    );
+                })()
+            )}
         </div>
-        {chartType !== 'kpi' && (
-            <ChartControls
-                config={editableChartConfig}
-                setConfig={setEditableChartConfig}
-                numericColumns={numericColumns}
-                categoricalColumns={categoricalColumns}
-                allColumns={allColumns}
-            />
-        )}
-        {wasOverridden && (
-            <div className="p-3 text-sm text-info-text bg-info-background border-b border-info-border flex items-center gap-2">
-                <Info size={16} />
-                <p>Chart type automatically changed to Bar Chart for better visualization.</p>
-            </div>
-        )}
-        <div className="h-96 w-full p-4" ref={chartContainerRef}>
-            {chartType !== 'kpi' && <h4 className="text-center font-semibold mb-4 text-text">{editableChartConfig.title}</h4>}
-            <ResponsiveContainer>
-               {ChartComponent ? (
-                <ChartComponent data={chartReadyData} config={configToRender} />
-              ) : (
-                <div className="text-center py-8 text-text-secondary">Unsupported chart type: {chartType}</div>
-              )}
-            </ResponsiveContainer>
-        </div>
-      </div>
     );
   };
   
