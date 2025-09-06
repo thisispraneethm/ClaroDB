@@ -1,14 +1,11 @@
-
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-    PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart,
-    ScatterChart, Scatter
+    PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart 
 } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 import { ConversationTurn, ChartGenerationResult } from '../types';
-import { Table, BarChart2, Lightbulb, ChevronLeft, ChevronRight, Loader2, FileDown, FileText, Printer, FileImage, Info } from 'lucide-react';
+import { Table, BarChart2, Lightbulb, ChevronLeft, ChevronRight, Loader2, FileDown, FileText, Printer, FileImage } from 'lucide-react';
 
 interface ResultsDisplayProps {
   turn: ConversationTurn;
@@ -16,27 +13,9 @@ interface ResultsDisplayProps {
   onGenerateChart: (turnId: string) => void;
 }
 
-interface ChartComponentProps {
-  data: Record<string, any>[];
-  config: ChartGenerationResult;
-}
-
 type Tab = 'table' | 'insights' | 'chart';
 const ROWS_PER_PAGE = 50;
-
-// A larger, more visually distinct palette (Tableau 10)
-const PALETTE = ['#4E79A7', '#F28E2C', '#E15759', '#76B7B2', '#59A14F', '#EDC949', '#AF7AA1', '#FF9DA7', '#9C755F', '#BAB0AB'];
-
-// Procedurally generate visually distinct colors if the palette is exhausted
-const getColor = (index: number): string => {
-  if (index < PALETTE.length) {
-    return PALETTE[index];
-  }
-  // Generate new colors using the golden ratio for good distribution
-  const hue = (index * 137.508) % 360;
-  return `hsl(${hue}, 70%, 50%)`;
-};
-
+const PALETTE = ['#007AFF', '#34C759', '#FF9500', '#FF3B30', '#5856D6', '#AF52DE'];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -76,6 +55,90 @@ const MetadataDisplay: React.FC<{
       <span>Cost: <b className="text-text">${cost.toFixed(6)}</b></span>
     </div>
   );
+};
+
+const ChartControls: React.FC<{
+    config: ChartGenerationResult;
+    setConfig: React.Dispatch<React.SetStateAction<ChartGenerationResult | null>>;
+    numericColumns: string[];
+    categoricalColumns: string[];
+    allColumns: string[];
+}> = ({ config, setConfig, numericColumns, categoricalColumns, allColumns }) => {
+
+    const handleChartTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const newType = e.target.value as ChartGenerationResult['chartType'];
+        setConfig(prev => {
+            if (!prev) return null;
+            let newDataKeys = prev.dataKeys;
+            if (newType === 'pie' && prev.dataKeys.length > 1) {
+                newDataKeys = [prev.dataKeys[0]];
+            }
+            return { ...prev, chartType: newType, dataKeys: newDataKeys };
+        });
+    };
+
+    const handleXAxisChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setConfig(prev => prev ? { ...prev, nameKey: e.target.value } : null);
+    };
+
+    const handleYAxisChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const newYKey = e.target.value;
+        setConfig(prev => {
+            if (!prev) return null;
+            const newConfig: ChartGenerationResult = { ...prev, dataKeys: [newYKey] };
+            // If chart was multi-series, simplify it to a basic bar chart
+            if (prev.chartType === 'stackedBar' || prev.chartType === 'composed') {
+                newConfig.chartType = 'bar';
+            }
+            return newConfig;
+        });
+    };
+
+    const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setConfig(prev => prev ? { ...prev, title: e.target.value } : null);
+    };
+
+    const xAxisOptions = useMemo(() => {
+        if (config.chartType === 'scatter') return numericColumns;
+        if (config.chartType === 'pie') return categoricalColumns;
+        return allColumns;
+    }, [config.chartType, numericColumns, categoricalColumns, allColumns]);
+    
+    const controlClass = "w-full p-2 text-sm border border-input rounded-md focus:ring-1 focus:ring-ring focus:outline-none transition bg-card";
+
+    return (
+        <div className="p-3 bg-secondary-background/70 border-b border-black/5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-center">
+            <div>
+                 <label className="block text-xs font-medium text-text-secondary mb-1">Chart Title</label>
+                 <input type="text" value={config.title} onChange={handleTitleChange} className={controlClass} />
+            </div>
+            <div>
+                 <label className="block text-xs font-medium text-text-secondary mb-1">Chart Type</label>
+                 <select value={config.chartType} onChange={handleChartTypeChange} className={controlClass}>
+                    <option value="bar">Bar</option>
+                    <option value="line">Line</option>
+                    <option value="area">Area</option>
+                    <option value="pie">Pie</option>
+                    <option value="scatter">Scatter</option>
+                    <option value="composed">Composed</option>
+                    <option value="stackedBar">Stacked Bar</option>
+                 </select>
+            </div>
+            <div>
+                 <label className="block text-xs font-medium text-text-secondary mb-1">{config.chartType === 'pie' ? 'Label' : 'X-Axis'}</label>
+                 <select value={config.nameKey} onChange={handleXAxisChange} className={controlClass}>
+                     {xAxisOptions.map(col => <option key={col} value={col}>{col}</option>)}
+                 </select>
+            </div>
+            <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1">{config.chartType === 'pie' ? 'Value' : 'Y-Axis'}</label>
+                <select value={config.dataKeys?.[0] || ''} onChange={handleYAxisChange} className={controlClass} disabled={numericColumns.length === 0}>
+                    {numericColumns.length === 0 && <option>No numeric columns</option>}
+                    {numericColumns.map(col => <option key={col} value={col}>{col}</option>)}
+                </select>
+            </div>
+        </div>
+    );
 };
 
 const ExportDropdown: React.FC<{
@@ -144,180 +207,6 @@ const ExportDropdown: React.FC<{
     );
 }
 
-// --- Individual Chart Components ---
-const tickProps = { fontSize: 11, fill: '#5A6474', dy: 5 };
-
-const BarChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
-  // Defensive check for required props
-  !config.dataKeys || config.dataKeys.length === 0 ? (
-    <p className="text-center py-8 text-text-secondary">Invalid chart configuration: Missing data key for Y-axis.</p>
-  ) : (
-    <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-    <defs>
-      <filter id="bar-shadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor={getColor(0)} floodOpacity="0.3"/>
-      </filter>
-    </defs>
-    <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
-    <XAxis dataKey={config.nameKey} tickLine={false} axisLine={false} tick={tickProps} />
-    <YAxis tickLine={false} axisLine={false} tick={tickProps} />
-    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
-    <Legend wrapperStyle={{fontSize: "12px"}} />
-    <Bar dataKey={config.dataKeys[0]} fill={getColor(0)} radius={[6, 6, 0, 0]} style={{ filter: 'url(#bar-shadow)' }}/>
-    </BarChart>
-  )
-));
-
-const StackedBarChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
-  <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-    <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
-    <XAxis dataKey={config.nameKey} tickLine={false} axisLine={false} tick={tickProps} />
-    <YAxis tickLine={false} axisLine={false} tick={tickProps} />
-    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
-    <Legend wrapperStyle={{fontSize: "12px"}}/>
-    {config.dataKeys.map((key, i) => (
-        <Bar key={key} dataKey={key} stackId="a" fill={getColor(i)} radius={i === config.dataKeys.length - 1 ? [6, 6, 0, 0] : [0,0,0,0]} />
-    ))}
-  </BarChart>
-));
-
-const LineChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
-    !config.dataKeys || config.dataKeys.length === 0 ? (
-    <p className="text-center py-8 text-text-secondary">Invalid chart configuration: Missing data key for Y-axis.</p>
-  ) : (
-    <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-      <defs>
-        <filter id="line-shadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor={getColor(0)} floodOpacity="0.4"/>
-        </filter>
-    </defs>
-    <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
-    <XAxis dataKey={config.nameKey} tickLine={false} axisLine={false} tick={tickProps} />
-    <YAxis tickLine={false} axisLine={false} tick={tickProps} />
-    <Tooltip content={<CustomTooltip />} cursor={{ stroke: getColor(0), strokeWidth: 1, strokeDasharray: "4 4" }}/>
-    <Legend wrapperStyle={{fontSize: "12px"}}/>
-    <Line type="monotone" dataKey={config.dataKeys[0]} stroke={getColor(0)} strokeWidth={2.5} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: getColor(0) }} style={{ filter: 'url(#line-shadow)' }}/>
-    </LineChart>
-  )
-));
-
-const AreaChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
-    !config.dataKeys || config.dataKeys.length === 0 ? (
-    <p className="text-center py-8 text-text-secondary">Invalid chart configuration: Missing data key for Y-axis.</p>
-  ) : (
-    <AreaChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-      <defs>
-      <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="5%" stopColor={getColor(0)} stopOpacity={0.4}/>
-        <stop offset="95%" stopColor={getColor(0)} stopOpacity={0.05}/>
-      </linearGradient>
-      <filter id="line-shadow" x="-50%" y="-50%" width="200%" height="200%">
-        <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor={getColor(0)} floodOpacity="0.4"/>
-      </filter>
-    </defs>
-    <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
-    <XAxis dataKey={config.nameKey} tickLine={false} axisLine={false} tick={tickProps} />
-    <YAxis tickLine={false} axisLine={false} tick={tickProps} />
-    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
-    <Legend wrapperStyle={{fontSize: "12px"}}/>
-    <Area type="monotone" dataKey={config.dataKeys[0]} stroke={getColor(0)} strokeWidth={2.5} fill="url(#areaGradient)" dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: getColor(0) }} style={{ filter: 'url(#line-shadow)' }} />
-    </AreaChart>
-  )
-));
-
-const ComposedChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
-  <ComposedChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-    <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
-    <XAxis dataKey={config.nameKey} tickLine={false} axisLine={false} tick={tickProps} />
-    <YAxis tickLine={false} axisLine={false} tick={tickProps} />
-    <Tooltip content={<CustomTooltip />} />
-    <Legend wrapperStyle={{fontSize: "12px"}}/>
-    {config.dataKeys.map((key, i) => {
-        const type = config.composedTypes?.[i] || 'bar';
-        const color = getColor(i);
-        switch (type) {
-            case 'line': return <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={2.5} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: color }} />;
-            case 'area': return <Area key={key} type="monotone" dataKey={key} fill={color} stroke={color} fillOpacity={0.6} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: color }} />;
-            default: return <Bar key={key} dataKey={key} fill={color} radius={[6, 6, 0, 0]} />;
-        }
-    })}
-  </ComposedChart>
-));
-
-const PieChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
-    <PieChart>
-    <Pie 
-      data={data} 
-      dataKey={config.dataKeys[0]} 
-      nameKey={config.nameKey} 
-      cx="50%" 
-      cy="50%" 
-      outerRadius={'80%'}
-      innerRadius={'60%'}
-      stroke="#F8F9FC"
-      strokeWidth={3}
-      paddingAngle={3}
-      cornerRadius={8}
-    >
-      {data.map((entry, index) => <Cell key={`cell-${index}`} fill={getColor(index)} />)}
-    </Pie>
-    <Tooltip content={<CustomTooltip />} />
-    <Legend wrapperStyle={{fontSize: "12px"}}/>
-    </PieChart>
-));
-
-const ScatterChartComponent = React.memo<ChartComponentProps>(({ data, config }) => (
-    !config.dataKeys || config.dataKeys.length === 0 || !config.nameKey ? (
-    <p className="text-center py-8 text-text-secondary">Invalid chart configuration: A scatter plot requires two numeric axes.</p>
-  ) : (
-    <ScatterChart margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-        <CartesianGrid stroke="rgba(0,0,0,0.05)" />
-        <XAxis type="number" dataKey={config.nameKey} name={config.nameKey} tickLine={false} axisLine={false} tick={tickProps} />
-        <YAxis type="number" dataKey={config.dataKeys[0]} name={config.dataKeys[0]} tickLine={false} axisLine={false} tick={tickProps} />
-        <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
-        <Legend wrapperStyle={{fontSize: "12px"}}/>
-        <Scatter name={config.title} data={data} fill={getColor(0)} />
-    </ScatterChart>
-  )
-));
-
-const KPIComponent = React.memo<ChartComponentProps>(({ data, config }) => {
-    if (data.length === 0) return null;
-    const row = data[0];
-    const metricValue = row[config.dataKeys[0]];
-    const metricLabel = config.title;
-    const categoryValue = row[config.nameKey];
-
-    const formattedValue = typeof metricValue === 'number'
-        ? metricValue.toLocaleString(undefined, { maximumFractionDigits: 2, notation: 'compact' })
-        : String(metricValue);
-
-    return (
-        <div className="flex flex-col items-center justify-center h-full text-center p-4">
-            <p className="text-md font-semibold text-text-secondary mb-2 truncate" title={metricLabel}>{metricLabel}</p>
-            <h2 className="text-6xl font-bold text-text tracking-tight">
-                {formattedValue}
-            </h2>
-            {categoryValue && (
-                <p className="text-sm text-text-secondary mt-2">
-                    in <span className="font-semibold text-text">{categoryValue}</span>
-                </p>
-            )}
-        </div>
-    );
-});
-
-const CHART_COMPONENTS: { [key in ChartGenerationResult['chartType']]: React.FC<ChartComponentProps> } = {
-    bar: BarChartComponent,
-    stackedBar: StackedBarChartComponent,
-    line: LineChartComponent,
-    area: AreaChartComponent,
-    composed: ComposedChartComponent,
-    pie: PieChartComponent,
-    scatter: ScatterChartComponent,
-    kpi: KPIComponent,
-};
-
 
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsights, onGenerateChart }) => {
   const { analysisResult, insightsResult, chartResult, insightsLoading, chartLoading } = turn;
@@ -326,17 +215,22 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
   
   const [activeTab, setActiveTab] = useState<Tab>('table');
   const [currentPage, setCurrentPage] = useState(1);
+  const [editableChartConfig, setEditableChartConfig] = useState<ChartGenerationResult | null>(null);
   
   const prevTurnRef = useRef<ConversationTurn | null>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const insightsContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setEditableChartConfig(turn.chartResult?.chartConfig || null);
+  }, [turn.chartResult]);
   
   useEffect(() => {
     const prevTurn = prevTurnRef.current;
     
     const justGotData = !prevTurn?.analysisResult && !!turn.analysisResult;
     const justGotInsights = !prevTurn?.insightsResult && !!turn.insightsResult;
-    const justGotChart = !prevTurn?.chartResult && !!turn.chartResult;
+    const justGotChart = !prevTurn?.chartResult?.chartConfig && !!turn.chartResult?.chartConfig;
 
     if (justGotChart) {
         setActiveTab('chart');
@@ -356,39 +250,25 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
   const hasInsights = !!insightsResult && insightsResult.insights !== "No insights generated.";
   const hasChart = chartResult?.chartConfig !== null && chartResult?.chartConfig !== undefined;
 
-  const { numericColumns, allColumns } = useMemo(() => {
+  const { numericColumns, categoricalColumns, allColumns } = useMemo(() => {
         if (!data || data.length === 0) {
-            return { numericColumns: [], allColumns: [] };
+            return { numericColumns: [], categoricalColumns: [], allColumns: [] };
         }
         const numeric: string[] = [];
+        const categorical: string[] = [];
         const all = Object.keys(data[0]);
-        
         for (const header of all) {
-            // Robust numeric check: handles numbers and valid numeric strings, ignoring null/empty.
-            const isNumeric = data.every(row => {
-                const value = row[header];
-                if (value === null || String(value).trim() === '') return true; // Treat null/empty as non-decisive
-                return !isNaN(Number(value));
-            });
-
+            const isNumeric = data.every(row => row[header] === null || typeof row[header] === 'number');
             if (isNumeric) {
                 numeric.push(header);
+            } else {
+                categorical.push(header);
             }
         }
-      return { numericColumns: numeric, allColumns: all };
+        return { numericColumns: numeric, categoricalColumns: categorical, allColumns: all };
     }, [data]);
     
-    // Coerce numeric string values to numbers for robust charting
-    const chartReadyData = useMemo(() => {
-        if (numericColumns.length === 0) return data;
-        return data.map(row => {
-            const newRow = { ...row };
-            numericColumns.forEach(col => { if (newRow[col] !== null) newRow[col] = Number(newRow[col]); });
-            return newRow;
-        });
-    }, [data, numericColumns]);
-
-    const handleExportCsv = () => {
+  const handleExportCsv = () => {
       if (!data || data.length === 0) return;
       
       const headers = Object.keys(data[0]);
@@ -455,7 +335,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
       const svgElement = chartContainerRef.current.querySelector('svg');
       if (!svgElement) return;
 
-      const title = turn.chartResult?.chartConfig?.title || 'chart';
+      const title = editableChartConfig?.title || 'chart';
       const filename = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
       const a = document.createElement('a');
 
@@ -487,7 +367,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
           const url = URL.createObjectURL(svgBlob);
 
           img.onload = () => {
-              ctx.fillStyle = '#F8F9FC'; // Set a background color
+              ctx.fillStyle = 'white'; // Set a white background
               ctx.fillRect(0, 0, width, height);
               ctx.drawImage(img, 0, 0);
               URL.revokeObjectURL(url);
@@ -505,59 +385,162 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
     if (chartLoading) {
       return <div className="text-center py-8 text-text-secondary flex items-center justify-center"><Loader2 size={20} className="animate-spin mr-2" /> Generating chart...</div>;
     }
-
-    const chartConfig = turn.chartResult?.chartConfig;
-    const canDisplayContent = data.length > 0 && allColumns.length > 0;
-
-    if (!canDisplayContent) {
-        return (
-            <div className="bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card text-center p-8 text-text-secondary">
-                <p className="font-semibold text-text">No data to visualize.</p>
-                <p className="text-sm mt-1">The query returned no results.</p>
-            </div>
-        );
-    }
-    
-    return (
-        <div className="w-full bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card">
-            {turn.chartResult && turn.chartResult.model !== 'local' && (
-                <div className="px-4 py-2 border-b border-black/5">
-                    <MetadataDisplay
-                        label="Chart Generation"
-                        model={turn.chartResult.model}
-                        cost={turn.chartResult.cost}
-                        prompt_tokens={turn.chartResult.prompt_tokens}
-                        completion_tokens={turn.chartResult.completion_tokens}
-                    />
-                </div>
+    if (!editableChartConfig || !data || data.length === 0) return (
+        <div className="bg-secondary-background rounded-lg border border-border">
+            {chartResult && (
+              <div className="px-4 py-2 border-b border-border">
+                <MetadataDisplay
+                    label="Chart Generation"
+                    model={chartResult.model}
+                    cost={chartResult.cost}
+                    prompt_tokens={chartResult.prompt_tokens}
+                    completion_tokens={chartResult.completion_tokens}
+                />
+              </div>
             )}
-            
-            {!chartConfig ? (
-                <div className="h-96 w-full p-4 flex flex-col items-center justify-center text-center text-text-secondary">
-                    <BarChart2 size={32} className="mb-4 text-primary/50" />
-                    <p className="font-semibold text-text">Chart not generated.</p>
-                    <p className="text-sm mt-1">Click the "Generate Chart" button to automatically create a bar chart.</p>
-                </div>
-            ) : (
-                (() => {
-                    // Always render a bar chart, as requested.
-                    const ChartComponent = CHART_COMPONENTS['bar'];
-
-                    return (
-                        <div className="h-96 w-full p-4" ref={chartContainerRef}>
-                            <h4 className="text-center font-semibold mb-4 text-text">{chartConfig.title}</h4>
-                            <ResponsiveContainer>
-                               {ChartComponent ? (
-                                <ChartComponent data={chartReadyData} config={chartConfig} />
-                              ) : (
-                                <div className="text-center py-8 text-text-secondary">Bar chart component is unavailable.</div>
-                              )}
-                            </ResponsiveContainer>
-                        </div>
-                    );
-                })()
-            )}
+            <div className="text-center py-8 text-text-secondary">Chart could not be generated for this query.</div>
         </div>
+    );
+    const { chartType, dataKeys, nameKey, title, composedTypes } = editableChartConfig;
+
+    return (
+      <div className="w-full bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card">
+        <div className="px-4 py-2 border-b border-black/5">
+          <MetadataDisplay
+              label="Chart Generation"
+              model={chartResult!.model}
+              cost={chartResult!.cost}
+              prompt_tokens={chartResult!.prompt_tokens}
+              completion_tokens={chartResult!.completion_tokens}
+          />
+        </div>
+        <ChartControls
+          config={editableChartConfig}
+          setConfig={setEditableChartConfig}
+          numericColumns={numericColumns}
+          categoricalColumns={categoricalColumns}
+          allColumns={allColumns}
+        />
+        <div className="h-96 w-full p-4" ref={chartContainerRef}>
+            <h4 className="text-center font-semibold mb-4 text-text">{title}</h4>
+            <ResponsiveContainer>
+              {(() => {
+                const tickProps = { fontSize: 11, fill: '#5A6474', dy: 5 };
+                switch (chartType) {
+                  case 'bar':
+                    return (
+                      <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                        <defs>
+                          <filter id="bar-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                             <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor={PALETTE[0]} floodOpacity="0.3"/>
+                          </filter>
+                        </defs>
+                        <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
+                        <XAxis dataKey={nameKey} tickLine={false} axisLine={false} tick={tickProps} />
+                        <YAxis tickLine={false} axisLine={false} tick={tickProps} />
+                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
+                        <Legend wrapperStyle={{fontSize: "12px"}} />
+                        <Bar dataKey={dataKeys[0]} fill={PALETTE[0]} radius={[6, 6, 0, 0]} style={{ filter: 'url(#bar-shadow)' }}/>
+                      </BarChart>
+                    );
+                   case 'stackedBar':
+                        return (
+                          <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                            <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
+                            <XAxis dataKey={nameKey} tickLine={false} axisLine={false} tick={tickProps} />
+                            <YAxis tickLine={false} axisLine={false} tick={tickProps} />
+                            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
+                            <Legend wrapperStyle={{fontSize: "12px"}}/>
+                            {dataKeys.map((key, i) => (
+                                <Bar key={key} dataKey={key} stackId="a" fill={PALETTE[i % PALETTE.length]} radius={i === dataKeys.length - 1 ? [6, 6, 0, 0] : [0,0,0,0]} />
+                            ))}
+                          </BarChart>
+                        );
+                  case 'line':
+                    return (
+                      <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                           <defs>
+                              <filter id="line-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                                  <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor={PALETTE[0]} floodOpacity="0.4"/>
+                              </filter>
+                          </defs>
+                          <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
+                          <XAxis dataKey={nameKey} tickLine={false} axisLine={false} tick={tickProps} />
+                          <YAxis tickLine={false} axisLine={false} tick={tickProps} />
+                          <Tooltip content={<CustomTooltip />} cursor={{ stroke: PALETTE[0], strokeWidth: 1, strokeDasharray: "4 4" }}/>
+                          <Legend wrapperStyle={{fontSize: "12px"}}/>
+                          <Line type="monotone" dataKey={dataKeys[0]} stroke={PALETTE[0]} strokeWidth={2.5} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: PALETTE[0] }} style={{ filter: 'url(#line-shadow)' }}/>
+                      </LineChart>
+                    );
+                  case 'area':
+                        return (
+                          <AreaChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                             <defs>
+                              <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor={PALETTE[0]} stopOpacity={0.4}/>
+                                <stop offset="95%" stopColor={PALETTE[0]} stopOpacity={0.05}/>
+                              </linearGradient>
+                              <filter id="line-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                                <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor={PALETTE[0]} floodOpacity="0.4"/>
+                              </filter>
+                            </defs>
+                            <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
+                            <XAxis dataKey={nameKey} tickLine={false} axisLine={false} tick={tickProps} />
+                            <YAxis tickLine={false} axisLine={false} tick={tickProps} />
+                            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
+                            <Legend wrapperStyle={{fontSize: "12px"}}/>
+                            <Area type="monotone" dataKey={dataKeys[0]} stroke={PALETTE[0]} strokeWidth={2.5} fill="url(#areaGradient)" dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: PALETTE[0] }} style={{ filter: 'url(#line-shadow)' }} />
+                          </AreaChart>
+                        );
+                  case 'composed':
+                        return (
+                            <ComposedChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                                <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
+                                <XAxis dataKey={nameKey} tickLine={false} axisLine={false} tick={tickProps} />
+                                <YAxis tickLine={false} axisLine={false} tick={tickProps} />
+                                <Tooltip content={<CustomTooltip />} />
+                                <Legend wrapperStyle={{fontSize: "12px"}}/>
+                                {dataKeys.map((key, i) => {
+                                    const type = composedTypes?.[i] || 'bar';
+                                    const color = PALETTE[i % PALETTE.length];
+                                    switch (type) {
+                                        case 'line': return <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={2.5} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: color }} />;
+                                        case 'area': return <Area key={key} type="monotone" dataKey={key} fill={color} stroke={color} fillOpacity={0.6} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: color }} />;
+                                        default: return <Bar key={key} dataKey={key} fill={color} radius={[6, 6, 0, 0]} />;
+                                    }
+                                })}
+                            </ComposedChart>
+                        );
+                  case 'pie':
+                    return (
+                      <PieChart>
+                        <Pie 
+                          data={data} 
+                          dataKey={dataKeys[0]} 
+                          nameKey={nameKey} 
+                          cx="50%" 
+                          cy="50%" 
+                          outerRadius={'80%'}
+                          innerRadius={'60%'}
+                          stroke="#F8F9FC"
+                          strokeWidth={3}
+                          paddingAngle={3}
+                          // FIX: The `cornerRadius` prop belongs on the <Pie> component, not on individual <Cell>s.
+                          cornerRadius={8}
+                        >
+                          {data.map((entry, index) => <Cell key={`cell-${index}`} fill={PALETTE[index % PALETTE.length]} />)}
+                        </Pie>
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend wrapperStyle={{fontSize: "12px"}}/>
+                      </PieChart>
+                    );
+                  default:
+                      return <div className="text-center py-8 text-text-secondary">Unsupported chart type: {chartType}</div>;
+                }
+              })()}
+            </ResponsiveContainer>
+        </div>
+      </div>
     );
   };
   

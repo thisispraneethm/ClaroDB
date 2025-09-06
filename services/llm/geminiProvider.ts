@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, Chat, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { LLMProvider } from './base';
 import { SQLGenerationResult, ChartGenerationResult, TableSchema, InsightGenerationResult, ChartGenerationWithMetadataResult, Join } from '../../types';
 import { LLMGenerationError } from '../../utils/exceptions';
@@ -6,14 +6,14 @@ import { config } from '../../config';
 import { enhancePromptWithSchemaAwareness } from '../../utils/promptEnhancer';
 import { Correction } from "../handlers/base";
 
+// Safari-specific fix: Detect Safari to alter the request payload structure.
+const isSafari = typeof navigator !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
 export class GeminiProvider extends LLMProvider {
   private ai: GoogleGenAI;
 
   constructor() {
     super();
-    if (!config.apiKey) {
-      throw new Error("Gemini API key is not configured.");
-    }
     this.ai = new GoogleGenAI({ apiKey: config.apiKey });
   }
 
@@ -24,8 +24,17 @@ export class GeminiProvider extends LLMProvider {
     const completionCost = (completionTokens / 1_000_000) * pricing.completion;
     return promptCost + completionCost;
   }
-  
-  startChatSession(schemas: TableSchema, dialect: string, dataPreview?: Record<string, Record<string, any>[]>, joins?: Join[], corrections?: Correction[]): Chat {
+
+  async generateSQL(prompt: string, schemas: TableSchema, dialect: string, history: { role: string, content: string }[], dataPreview?: Record<string, Record<string, any>[]>, joins?: Join[], corrections?: Correction[]): Promise<SQLGenerationResult> {
+    const allColumns = Object.values(schemas).flat().map(col => col.name);
+    const typoCorrections = enhancePromptWithSchemaAwareness(prompt, allColumns);
+    
+    let correctionHint = "";
+    if (Object.keys(typoCorrections).length > 0) {
+        const hints = Object.entries(typoCorrections).map(([t, c]) => `'${t}'->'${c}'`).join(", ");
+        correctionHint = `\nHINT: The user may have made typos. Apply these corrections: ${hints}.`;
+    }
+
     const schemasStr = Object.entries(schemas)
       .map(([name, cols]) => `- Table '${name}' columns: [${cols.map(c => `${c.name} (${c.type})`).join(', ')}]`)
       .join('\n');
@@ -58,9 +67,7 @@ export class GeminiProvider extends LLMProvider {
     if (dialect === 'alasql') {
         dialectSpecificInstruction = `- IMPORTANT: For the 'alasql' dialect, you MUST adhere to these critical rules:
   - Enclose any column or table name containing spaces or special characters in square brackets (e.g., \`SELECT [Customer Id] FROM [Order Details]\`).
-  - **You MUST NOT use window functions**. Functions like \`LAG()\`, \`LEAD()\`, \`ROW_NUMBER()\`, \`RANK()\`, or any function that uses an \`OVER()\` clause are NOT supported. For complex calculations like year-over-year growth, you must use alternative methods such as self-joins.
-  - **For date extraction from string columns**, do not use date functions like \`YEAR()\`, \`MONTH()\`, etc. directly, as they can be unreliable with text types. Instead, use the string function \`SUBSTRING\`. For example, to get the year from a 'YYYY-MM-DD' formatted date string in a column named 'order_date', use \`SUBSTRING(order_date, 1, 4)\`.
-  - **When aggregating data (e.g., using GROUP BY) based on a derived value like an extracted year**, you MUST repeat the full function in the GROUP BY clause. For instance, if you \`SELECT SUBSTRING(date_col, 1, 4) AS year\`, you must then \`GROUP BY SUBSTRING(date_col, 1, 4)\`. Do NOT group by the original column (e.g., \`GROUP BY date_col\`). The same rule applies to ORDER BY.`;
+  - **You MUST NOT use window functions**. Functions like \`LAG()\`, \`LEAD()\`, \`ROW_NUMBER()\`, \`RANK()\`, or any function that uses an \`OVER()\` clause are NOT supported. For complex calculations like year-over-year growth, you must use alternative methods such as self-joins.`;
     }
 
     let userCorrectionsStr = "";
@@ -78,51 +85,98 @@ Correct SQL: ${c.sql}
 `;
     }
 
-    const systemInstruction = `You are a precise, world-class SQL generator. Your sole purpose is to translate a natural language question into a single, valid SQL query for the ${dialect} dialect.
+    const fewShotExamples = `
+---
+Here are some examples of how to map questions to SQL queries. Adapt these patterns to the provided schema.
+
+## Basic Aggregation
+Question: "total sales for each product"
+SQL: SELECT product_column, SUM(sales_column) FROM table_name GROUP BY product_column;
+
+## Filtering
+Question: "employees in the 'Sales' department"
+SQL: SELECT * FROM employee_table WHERE department_column = 'Sales';
+
+## Joining
+Question: "sales in 'North America' and their sales reps"
+SQL: SELECT t1.product, t1.sales, t2.employee_name FROM sales_table t1 JOIN employee_table t2 ON t1.region_key = t2.region_key WHERE t1.region_key = 'North America';
+
+## Data Enrichment with General Knowledge (CTE and CASE)
+Question: "what is the distribution of orders by continent" (given a table with a 'country' column but no 'continent' column)
+SQL: WITH enriched_orders AS (
+  SELECT
+    *,
+    CASE
+      WHEN country IN ('United States', 'Canada', 'Mexico') THEN 'North America'
+      WHEN country IN ('United Kingdom', 'Germany', 'France', 'Italy', 'Spain') THEN 'Europe'
+      WHEN country IN ('China', 'India', 'Japan', 'South Korea') THEN 'Asia'
+      WHEN country IN ('Brazil', 'Argentina', 'Colombia') THEN 'South America'
+      WHEN country IN ('Nigeria', 'Egypt', 'South Africa') THEN 'Africa'
+      WHEN country IN ('Australia', 'New Zealand') THEN 'Oceania'
+      ELSE 'Other'
+    END AS continent
+  FROM orders
+)
+SELECT
+  continent,
+  COUNT(order_id) AS number_of_orders
+FROM enriched_orders
+WHERE continent IS NOT NULL
+GROUP BY
+  continent
+ORDER BY
+  number_of_orders DESC;
+---
+`;
+
+    const systemPrompt = `You are a precise, world-class SQL generator. Your sole purpose is to translate a natural language question into a single, valid SQL query for the ${dialect} dialect.
 Constraints:
 - Return ONLY the raw SQL query. Do not include explanations, comments, or markdown formatting like \`\`\`sql.
 - Your entire response must be only the SQL query.
-- **Crucially, for any aggregated column (using functions like SUM, COUNT, AVG, etc.), you MUST provide a simple, descriptive, snake_case alias (e.g., \`SUM(sales) AS total_sales\`). This is vital for data visualization.**
 - Always qualify columns with table names or aliases (e.g., \`sales.product\`).
 - If the question asks for a metric "by" or "for each" of a certain category (e.g., "sales by region", "count of users per country"), you MUST use a GROUP BY clause.
-- Never hallucinate tables or columns that are not present in the provided schema.
+- **Intelligent Data Enrichment**: You MAY use your general world knowledge to enrich the data. If a question requires a column that is not in the schema but can be logically derived from existing columns (e.g., deriving 'continent' from a 'country' column, or 'day_of_week' from a 'date' column), you MUST generate SQL that creates this new column on the fly, typically using a Common Table Expression (CTE) with a CASE statement.
+- Never hallucinate tables or columns that are not present in the provided schema. The only exception is for new columns that are logically derived from existing data as part of a CTE (e.g., deriving a 'continent' column from a 'country' column).
 - If the question is ambiguous, choose the most conservative interpretation.
 - Return at most 1000 rows unless the user specifies a different limit.
-${userCorrectionsStr}
-${joinInstruction}
 ${dialectSpecificInstruction}
+${joinInstruction}
+${userCorrectionsStr}
+${fewShotExamples}
 Schema:
 ${schemasStr}
-${previewStr}`;
+${previewStr}
+${correctionHint}`;
 
-    return this.ai.chats.create({
-      model: 'gemini-2.5-flash',
-      config: {
-          systemInstruction,
-      },
-    });
-  }
+    const historyStr = history.map(h => {
+        return h.role === 'user' 
+            ? `PREVIOUS QUESTION: "${h.content}"`
+            : `PREVIOUS SQL:\n${h.content}`;
+    }).join('\n\n');
 
-  async continueChat(chat: Chat, prompt: string, schemas: TableSchema): Promise<SQLGenerationResult> {
-    const allColumns = Object.values(schemas).flat().map(col => col.name);
-    const typoCorrections = enhancePromptWithSchemaAwareness(prompt, allColumns);
-    
-    let correctionHint = "";
-    if (Object.keys(typoCorrections).length > 0) {
-        const hints = Object.entries(typoCorrections).map(([t, c]) => `'${t}'->'${c}'`).join(", ");
-        correctionHint = ` (HINT: The user may have made typos. Apply these corrections: ${hints}.)`;
-    }
-    
-    const finalPrompt = `Based on the conversation so far, generate a SQL query for this question: ${prompt}${correctionHint}`;
+    const currentQuestionStr = `--- Current Question ---\nBased on the conversation so far, generate a SQL query for this question: ${prompt}`;
+
+    // Safari-specific fix: Send content as an array of strings to avoid ReadableStream issue.
+    const contentsPayload = isSafari
+        ? [
+            systemPrompt,
+            ...(historyStr ? [`--- Conversation History ---\n${historyStr}`] : []),
+            currentQuestionStr
+          ]
+        : `${systemPrompt}\n\n${historyStr ? `--- Conversation History ---\n${historyStr}\n\n` : ''}${currentQuestionStr}`;
 
     try {
       const modelName = 'gemini-2.5-flash';
-      const response: GenerateContentResponse = await chat.sendMessage({ message: finalPrompt });
+      
+      const response: GenerateContentResponse = await this.ai.models.generateContent({
+        model: modelName,
+        contents: contentsPayload,
+      });
+      
       const sqlQuery = response.text.replace(/```sql/g, '').replace(/```/g, '').trim();
 
-      const usageMetadata = response.usageMetadata;
-      const promptTokens = usageMetadata?.promptTokenCount ?? 0;
-      const completionTokens = usageMetadata?.candidatesTokenCount ?? 0;
+      const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
+      const completionTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
       const cost = this.calculateCost(modelName, promptTokens, completionTokens);
 
       return {
@@ -133,11 +187,13 @@ ${previewStr}`;
         completion_tokens: completionTokens,
       };
     } catch (e: any) {
-      let errorMessage = "I couldn't generate SQL for that. Please try rephrasing your question.";
-      if (e.message?.includes('API key not valid')) {
-          errorMessage = 'The configured Gemini API key is invalid or missing. Please contact the administrator.';
-      } else if (e.message?.toLowerCase().includes('quota')) {
-          errorMessage = 'The API usage limit has been reached. Please contact the administrator.';
+      let errorMessage = "I couldn't generate SQL for that. Please try rephrasing your question in plain English.";
+      if (typeof e.message === 'string') {
+          if (e.message.includes('API key not valid')) {
+              errorMessage = 'The configured Gemini API key is invalid or missing. Please contact the administrator.';
+          } else if (e.message.toLowerCase().includes('quota')) {
+              errorMessage = 'The API usage limit has been reached. Please contact the administrator.';
+          }
       }
       throw new LLMGenerationError(errorMessage);
     }
@@ -154,20 +210,18 @@ ${previewStr}`;
     
     const userPrompt = `Context: The user asked "${question}".\nResult sample (first 50 rows):\n${dataPreview}`;
     
-    const modelName = 'gemini-2.5-flash';
+    const contentsPayload = isSafari ? [systemInstruction, userPrompt] : `${systemInstruction}\n\n${userPrompt}`;
 
     try {
+      const modelName = 'gemini-2.5-flash';
+
       const response = await this.ai.models.generateContent({
         model: modelName,
-        contents: userPrompt,
-        config: {
-          systemInstruction,
-        },
+        contents: contentsPayload,
       });
-
-      const usageMetadata = response.usageMetadata;
-      const promptTokens = usageMetadata?.promptTokenCount ?? 0;
-      const completionTokens = usageMetadata?.candidatesTokenCount ?? 0;
+      
+      const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
+      const completionTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
       const cost = this.calculateCost(modelName, promptTokens, completionTokens);
 
       return {
@@ -179,6 +233,108 @@ ${previewStr}`;
       };
     } catch (e: any) {
       throw new LLMGenerationError(`Gemini insight generation failed: ${e.message}`);
+    }
+  }
+
+  async generateChart(question: string, data: Record<string, any>[]): Promise<ChartGenerationWithMetadataResult> {
+    if (data.length === 0 || Object.keys(data[0]).length < 2) {
+        return {
+            chartConfig: null,
+            model: 'N/A',
+            cost: 0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
+        };
+    }
+    const columns = Object.keys(data[0]);
+    const dataPreview = JSON.stringify(data.slice(0, 5), null, 2);
+    const modelName = "gemini-2.5-flash";
+
+    const systemPrompt = `You are a world-class data visualization expert. Your task is to analyze a user's question and a dataset to determine the single best chart representation.
+- User's question: "${question}"
+- Available columns: ${columns.join(', ')}
+- Data preview: ${dataPreview}
+
+CHART SELECTION GUIDELINES:
+- Time-series Trend: If the data has a clear time component (e.g., columns named 'date', 'day', 'month', 'year'), prefer 'line' or 'area' charts to show trends over time.
+- Categorical Comparison: To compare values across different categories, use 'bar'.
+- Proportional Composition: To show parts of a whole for a single metric across categories, use 'pie'. Only use a pie chart for 2-7 categories.
+- Multi-Metric Comparison: If there are multiple numeric columns to compare against a single category, use 'composed' (e.g., bar for one metric, line for another) or 'stackedBar'.
+- Correlation: If the goal is to see the relationship between two numeric variables, use 'scatter'.
+
+OUTPUT REQUIREMENTS:
+- Your output must be a single, valid JSON object with no other text or formatting.
+- The JSON must conform to the provided schema.
+- 'dataKeys' should contain a single element for simple charts (bar, line, area, pie). For 'composed' or 'stackedBar', it can contain multiple keys.
+- For 'composed' charts, the 'composedTypes' array must have the same number of elements as 'dataKeys', specifying the chart type for each key.
+- The 'title' should be a concise and descriptive title for the chart.`;
+    
+    const userPrompt = "Generate the chart configuration JSON for the provided context.";
+
+    const contentsPayload = isSafari ? [systemPrompt, userPrompt] : `${systemPrompt}\n\n${userPrompt}`;
+
+    try {
+        const response = await this.ai.models.generateContent({
+            model: modelName,
+            contents: contentsPayload,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        chartType: { type: Type.STRING, enum: ['bar', 'line', 'pie', 'scatter', 'area', 'composed', 'stackedBar'], description: 'The type of chart to render.' },
+                        dataKeys: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Column names for the primary metrics (Y-axis). Single item for simple charts, multiple for composed/stacked.' },
+                        nameKey: { type: Type.STRING, description: 'The column name for the category or label (X-axis or pie label).' },
+                        title: { type: Type.STRING, description: 'A descriptive title for the chart.' },
+                        composedTypes: {
+                            type: Type.ARRAY,
+                            nullable: true,
+                            items: { type: Type.STRING, enum: ['bar', 'line', 'area'] },
+                            description: "For 'composed' charts, specifies the type for each dataKey. Must match `dataKeys` length."
+                        }
+                    },
+                    required: ["chartType", "dataKeys", "nameKey", "title"]
+                },
+            },
+        });
+
+      const jsonStr = response.text.trim();
+      // FIX: The model might return a slightly malformed JSON. Find the start and end of the JSON object.
+      const jsonStart = jsonStr.indexOf('{');
+      const jsonEnd = jsonStr.lastIndexOf('}');
+      if (jsonStart === -1 || jsonEnd === -1) {
+          throw new Error("Generated response is not valid JSON.");
+      }
+      const correctedJsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
+
+      const chartConfig = JSON.parse(correctedJsonStr) as ChartGenerationResult;
+      const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
+      const completionTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
+      const cost = this.calculateCost(modelName, promptTokens, completionTokens);
+      
+      // Backwards compatibility for models that might still return dataKey
+      // @ts-ignore
+      if (chartConfig.dataKey && !chartConfig.dataKeys) {
+        // @ts-ignore
+        chartConfig.dataKeys = [chartConfig.dataKey];
+      }
+
+      return {
+        chartConfig,
+        model: modelName,
+        cost,
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens
+      };
+    } catch (e: any) {
+      console.error("Chart generation failed, returning null.", e)
+      return {
+          chartConfig: null,
+          model: modelName,
+          cost: 0,
+          prompt_tokens: 0,
+          completion_tokens: 0,
+      };
     }
   }
 }

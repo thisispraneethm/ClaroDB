@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState, useEffect } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { Join, Point } from '../types';
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -22,18 +22,8 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
   const [linePositions, setLinePositions] = useState<LinePosition[]>([]);
   const svgRef = useRef<SVGSVGElement>(null);
   const animatedPositionsRef = useRef<Record<string, { p1: Point; p2: Point }>>({});
-  // FIX: Initialize useRef with null to avoid "Expected 1 arguments, but got 0" error.
-  const animationFrameIdRef = useRef<number | null>(null);
-  const cardPositionsRef = useRef(cardPositions);
-  const joinsRef = useRef(joins);
-
-  useEffect(() => {
-    cardPositionsRef.current = cardPositions;
-  }, [cardPositions]);
-
-  useEffect(() => {
-    joinsRef.current = joins;
-  }, [joins]);
+  // FIX: The useRef hook requires an initial value. Provided `undefined` to fix the "Expected 1 arguments, but got 0" error.
+  const animationFrameIdRef = useRef<number | undefined>(undefined);
 
   useLayoutEffect(() => {
     const canvas = svgRef.current?.parentElement;
@@ -43,7 +33,7 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
       const targets: Record<string, { p1: Point; p2: Point; join: Join }> = {};
       const canvasRect = canvas.getBoundingClientRect();
 
-      joinsRef.current.forEach(join => {
+      joins.forEach(join => {
         const el1 = document.getElementById(`col-${join.table1}-${join.column1}`);
         const el2 = document.getElementById(`col-${join.table2}-${join.column2}`);
 
@@ -68,7 +58,6 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
     const animate = () => {
       const targets = getTargetPositions();
       const currentAnimated = animatedPositionsRef.current;
-      const currentJoins = joinsRef.current;
 
       for (const id in targets) {
         if (!currentAnimated[id]) {
@@ -96,7 +85,7 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
       const newPositions = Object.entries(currentAnimated).map(([id, points]) => ({
         id,
         ...points,
-        join: currentJoins.find(j => j.id === id)!,
+        join: joins.find(j => j.id === id)!,
       })).filter(p => p.join);
 
       setLinePositions(newPositions);
@@ -104,14 +93,14 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
       animationFrameIdRef.current = requestAnimationFrame(animate);
     };
 
-    animationFrameIdRef.current = requestAnimationFrame(animate);
+    animate();
 
     return () => {
       if (animationFrameIdRef.current) {
         cancelAnimationFrame(animationFrameIdRef.current);
       }
     };
-  }, []); // Empty dependency array ensures this runs only once
+  }, [joins, cardPositions]);
 
   return (
     <svg ref={svgRef} className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>

@@ -6,18 +6,18 @@ import alasql from 'alasql';
 import { IndexedDBManager } from '../db/indexedDBManager';
 
 const demoSalesData = [
-    { order_id: 'CA-2021-152156', order_date: '2021-11-08', product_category: 'Office Supplies', product: 'Staples', sales_amount: '$22.36', region: 'South' },
-    { order_id: 'CA-2021-138688', order_date: '2021-06-12', product_category: 'Office Supplies', product: 'Paper', sales_amount: '71.32', region: 'West' },
-    { order_id: 'US-2022-108966', order_date: '2022-10-11', product_category: 'Furniture', product: 'Tables', sales_amount: '957.57', region: 'South' },
+    { order_id: 'CA-2021-152156', order_date: '2021-11-08', product_category: 'Office Supplies', product: 'Staples', sales_amount: 22.36, region: 'South' },
+    { order_id: 'CA-2021-138688', order_date: '2021-06-12', product_category: 'Office Supplies', product: 'Paper', sales_amount: 71.32, region: 'West' },
+    { order_id: 'US-2022-108966', order_date: '2022-10-11', product_category: 'Furniture', product: 'Tables', sales_amount: 957.57, region: 'South' },
     { order_id: 'CA-2023-115812', order_date: '2023-06-09', product_category: 'Furniture', product: 'Bookcases', sales_amount: 173.94, region: 'Central' },
-    { order_id: 'CA-2023-115812', order_date: '2023-06-09', product_category: 'Office Supplies', product: 'Appliances', sales_amount: '$48.86', region: 'Central' },
-    { order_id: 'CA-2022-161389', order_date: '2022-12-05', product_category: 'Technology', product: 'Phones', sales_amount: '90.93', region: 'East' },
+    { order_id: 'CA-2023-115812', order_date: '2023-06-09', product_category: 'Office Supplies', product: 'Appliances', sales_amount: 48.86, region: 'Central' },
+    { order_id: 'CA-2022-161389', order_date: '2022-12-05', product_category: 'Technology', product: 'Phones', sales_amount: 90.93, region: 'East' },
     { order_id: 'US-2021-118983', order_date: '2021-11-22', product_category: 'Technology', product: 'Accessories', sales_amount: 23.64, region: 'East' },
-    { order_id: 'CA-2023-106320', order_date: '2023-09-25', product_category: 'Office Supplies', product: 'Art', sales_amount: '7.28', region: 'West' },
-    { order_id: 'CA-2022-121755', order_date: '2022-01-16', product_category: 'Technology', product: 'Phones', sales_amount: '$907.15', region: 'West' },
+    { order_id: 'CA-2023-106320', order_date: '2023-09-25', product_category: 'Office Supplies', product: 'Art', sales_amount: 7.28, region: 'West' },
+    { order_id: 'CA-2022-121755', order_date: '2022-01-16', product_category: 'Technology', product: 'Phones', sales_amount: 907.15, region: 'West' },
     { order_id: 'CA-2022-121755', order_date: '2022-01-16', product_category: 'Office Supplies', product: 'Binders', sales_amount: 18.50, region: 'West' },
-    { order_id: 'CA-2023-139619', order_date: '2023-09-19', product_category: 'Furniture', product: 'Chairs', sales_amount: '731.94', region: 'Central' },
-    { order_id: 'US-2023-156909', order_date: '2023-07-16', product_category: 'Office Supplies', product: 'Labels', sales_amount: '$14.62', region: 'Central' }
+    { order_id: 'CA-2023-139619', order_date: '2023-09-19', product_category: 'Furniture', product: 'Chairs', sales_amount: 731.94, region: 'Central' },
+    { order_id: 'US-2023-156909', order_date: '2023-07-16', product_category: 'Office Supplies', product: 'Labels', sales_amount: 14.62, region: 'Central' }
 ];
 
 const DEMO_TABLE_NAME = 'sales_data';
@@ -26,90 +26,30 @@ const DEMO_DB_NAME = 'clarodb_demo_stable'; // Use a static name to prevent DB l
 
 export class DemoDataHandler extends DataHandler {
     private dbManager: IndexedDBManager | null = null;
-    private alaDb: any | null = null;
 
     constructor() {
         super();
     }
 
-    /**
-     * Sanitizes data by identifying columns that contain numeric-like strings
-     * (e.g., "$1,234.56") and converting them to actual numbers.
-     */
-    private _sanitizeData(data: Record<string, any>[]): Record<string, any>[] {
-        if (data.length === 0) return data;
-
-        const columns = Object.keys(data[0]);
-        const columnsToSanitize: Set<string> = new Set();
-
-        for (const col of columns) {
-            let numericLikeCount = 0;
-            let nonNumericCount = 0;
-            const sampleSize = Math.min(data.length, 50);
-
-            for (let i = 0; i < sampleSize; i++) {
-                const value = data[i][col];
-                if (value === null || String(value).trim() === '') continue;
-
-                const cleanedValue = String(value).replace(/[\$,]/g, '');
-                if (cleanedValue.trim() !== '' && !isNaN(Number(cleanedValue))) {
-                    numericLikeCount++;
-                } else {
-                    nonNumericCount++;
-                }
-            }
-            
-            if (numericLikeCount > 0 && numericLikeCount / (numericLikeCount + nonNumericCount) > 0.8) {
-                columnsToSanitize.add(col);
-            }
-        }
-
-        if (columnsToSanitize.size === 0) return data;
-
-        return data.map(row => {
-            const newRow = { ...row };
-            for (const col of columnsToSanitize) {
-                const value = newRow[col];
-                if (value === null || value === undefined) {
-                    newRow[col] = null;
-                    continue;
-                }
-                const cleanedValue = String(value).replace(/[\$,]/g, '');
-                if (cleanedValue.trim() === '' || isNaN(Number(cleanedValue))) {
-                    newRow[col] = null;
-                } else {
-                    newRow[col] = Number(cleanedValue);
-                }
-            }
-            return newRow;
-        });
-    }
-
     async connect(): Promise<void> {
-        if (this.dbManager && this.alaDb) return;
+        if (this.dbManager) return;
 
         try {
             this.dbManager = new IndexedDBManager(DEMO_DB_NAME);
             await this.dbManager.open([DEMO_TABLE_NAME, CORRECTIONS_STORE_NAME]);
             
+            // Only add data if the store is empty to prevent re-writes on every load
             const existingData = await this.dbManager.getPreview(DEMO_TABLE_NAME, 1);
             if (existingData.length === 0) {
-              const sanitizedDemoData = this._sanitizeData(demoSalesData);
-              await this.dbManager.addData(DEMO_TABLE_NAME, sanitizedDemoData);
+              await this.dbManager.addData(DEMO_TABLE_NAME, demoSalesData);
             }
-            
-            this.alaDb = new alasql.Database();
-            const data = await this.dbManager.getData(DEMO_TABLE_NAME);
-            this.alaDb.exec(`CREATE TABLE ${DEMO_TABLE_NAME}`);
-            (this.alaDb.tables[DEMO_TABLE_NAME] as any).data = data;
-
         } catch (e: any) {
             throw new DataProcessingError(`Failed to initialize IndexedDB for demo: ${e.message}`);
         }
     }
 
     private checkDbManager() {
-        if (!this.dbManager || !this.alaDb) {
+        if (!this.dbManager) {
             throw new Error("Database not initialized. Call connect() first.");
         }
     }
@@ -122,6 +62,7 @@ export class DemoDataHandler extends DataHandler {
         if (firstRecord.length > 0) {
             schemas[DEMO_TABLE_NAME] = Object.keys(firstRecord[0]).map(key => ({
                 name: key,
+                // Basic type inference from the first record
                 type: typeof firstRecord[0][key] === 'number' ? 'NUMBER' : 'TEXT',
             }));
         } else {
@@ -130,11 +71,35 @@ export class DemoDataHandler extends DataHandler {
         return schemas;
     }
     
+    private parseTablesFromQuery(query: string): Set<string> {
+        const tableRegex = /(?:FROM|JOIN)\s+\[?(\w+)\]?/ig;
+        const tablesInQuery = new Set<string>();
+        let match;
+        while ((match = tableRegex.exec(query)) !== null) {
+            tablesInQuery.add(match[1]);
+        }
+        return tablesInQuery;
+    }
+
     async executeQuery(query: string): Promise<Record<string, any>[]> {
         this.checkDbManager();
         
         try {
-            return this.alaDb.exec(query);
+            const tablesInQuery = this.parseTablesFromQuery(query);
+            
+            if (!tablesInQuery.has(DEMO_TABLE_NAME) && tablesInQuery.size === 0) {
+                return alasql(query);
+            }
+
+            // Hybrid approach: Use IndexedDB for storage, and a temporary in-memory AlaSQL DB for querying.
+            const tempDb = new alasql.Database();
+            const data = await this.dbManager.getData(DEMO_TABLE_NAME);
+            
+            tempDb.exec(`CREATE TABLE ${DEMO_TABLE_NAME}`);
+            (tempDb.tables[DEMO_TABLE_NAME] as any).data = data;
+            
+            return tempDb.exec(query);
+
         } catch (e: any) {
             let friendlyMessage = e.message;
             if (typeof friendlyMessage === 'string') {
@@ -170,7 +135,6 @@ export class DemoDataHandler extends DataHandler {
             await this.dbManager.deleteDatabase();
             this.dbManager = null;
         }
-        this.alaDb = null;
     }
 
     async addCorrection(correction: Correction): Promise<void> {
@@ -180,7 +144,9 @@ export class DemoDataHandler extends DataHandler {
 
     async getCorrections(limit: number): Promise<Correction[]> {
         this.checkDbManager();
+        // FIX: Cast the result from getData to Correction[] as we know the data shape for this store.
         const allCorrections = await this.dbManager.getData(CORRECTIONS_STORE_NAME) as Correction[];
+        // Return the most recent 'limit' corrections
         return allCorrections.slice(-limit);
     }
 }

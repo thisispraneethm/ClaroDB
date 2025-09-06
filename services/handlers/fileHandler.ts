@@ -16,7 +16,6 @@ export class FileDataHandler extends DataHandler {
     private dbName: string;
     private tableNames: string[] = [];
     private workspaceId: string;
-    private alaDb: any | null = null;
 
     constructor(workspaceId: string) {
         super();
@@ -35,71 +34,9 @@ export class FileDataHandler extends DataHandler {
         }
     }
 
-    /**
-     * Sanitizes data by identifying columns that contain numeric-like strings
-     * (e.g., "$1,234.56") and converting them to actual numbers.
-     * This is crucial for ensuring SQL aggregations work correctly.
-     */
-    private _sanitizeData(data: Record<string, any>[]): Record<string, any>[] {
-        if (data.length === 0) return data;
-
-        const columns = Object.keys(data[0]);
-        const columnsToSanitize: Set<string> = new Set();
-
-        for (const col of columns) {
-            let numericLikeCount = 0;
-            let nonNumericCount = 0;
-            const sampleSize = Math.min(data.length, 50);
-
-            for (let i = 0; i < sampleSize; i++) {
-                const value = data[i][col];
-                if (value === null || String(value).trim() === '') continue;
-
-                // Check if the string, after removing common symbols, is a number.
-                const cleanedValue = String(value).replace(/[\$,]/g, '');
-                if (cleanedValue.trim() !== '' && !isNaN(Number(cleanedValue))) {
-                    numericLikeCount++;
-                } else {
-                    nonNumericCount++;
-                }
-            }
-
-            // Heuristic: If over 80% of sampled, non-empty values are numeric-like,
-            // we'll attempt to sanitize the entire column.
-            if (numericLikeCount > 0 && numericLikeCount / (numericLikeCount + nonNumericCount) > 0.8) {
-                columnsToSanitize.add(col);
-            }
-        }
-
-        if (columnsToSanitize.size === 0) {
-            return data; // No sanitization needed
-        }
-
-        // Apply the transformation to the entire dataset
-        return data.map(row => {
-            const newRow = { ...row };
-            for (const col of columnsToSanitize) {
-                const value = newRow[col];
-                if (value === null || value === undefined) {
-                    newRow[col] = null;
-                    continue;
-                }
-                
-                const cleanedValue = String(value).replace(/[\$,]/g, '');
-                if (cleanedValue.trim() === '' || isNaN(Number(cleanedValue))) {
-                    newRow[col] = null; // Set values that can't be parsed to null
-                } else {
-                    newRow[col] = Number(cleanedValue);
-                }
-            }
-            return newRow;
-        });
-    }
-
     async loadFiles(sources: FileSource[]): Promise<void> {
         this.checkDbManager();
         this.tableNames = [];
-        this.alaDb = null; // Reset AlaSQL instance on new file load
 
         try {
             if (sources.length === 0) {
@@ -107,7 +44,6 @@ export class FileDataHandler extends DataHandler {
                  return;
             }
             
-            this.alaDb = new alasql.Database();
             const workingStoreNames = sources.map(s => s.name);
             const originalStoreNames = sources.map(s => `${s.name}_original`);
             const storeNames = [...workingStoreNames, ...originalStoreNames, CORRECTIONS_STORE_NAME];
@@ -146,9 +82,11 @@ export class FileDataHandler extends DataHandler {
                     }
                 } else {
                     data = tryParseStructured(fileContent);
+                    // If it's a CSV and parsing fails, it's an error. Don't fall back to unstructured text.
                     if (data === null && extension === 'csv') {
                         throw new DataProcessingError(`Failed to parse CSV file '${source.file.name}'. Please ensure it has a header row and uses a standard delimiter (like comma or tab).`);
                     }
+                    // For other file types (like .txt), if parsing fails, fall back to unstructured.
                     if (data === null) {
                         const lines = fileContent.replace(/\r\n/g, '\n').split('\n').filter(l => l.trim() !== '');
                         data = lines.map(line => ({ "text_line": line }));
@@ -159,14 +97,10 @@ export class FileDataHandler extends DataHandler {
                     throw new DataProcessingError(`Could not extract any data from '${source.file.name}'. The file may be empty or in an unsupported format.`);
                 }
                 
-                const sanitizedData = this._sanitizeData(data);
-
-                await this.dbManager.addData(`${source.name}_original`, sanitizedData);
-                await this.dbManager.addData(source.name, sanitizedData);
+                // Store both the original data and the working copy. Sampling will affect the working copy only.
+                await this.dbManager.addData(`${source.name}_original`, data);
+                await this.dbManager.addData(source.name, data);
                 this.tableNames.push(source.name);
-                
-                this.alaDb.exec(`CREATE TABLE [${source.name}]`);
-                (this.alaDb.tables[source.name] as any).data = sanitizedData;
             }
         } catch (e: any) {
             await this.terminate();
@@ -193,7 +127,8 @@ export class FileDataHandler extends DataHandler {
         let sampledData: Record<string, any>[];
 
         if (method === 'random') {
-            const shuffled = [...original]; 
+            // AlaSQL's TABLESAMPLE is not supported. Implement random sampling using Fisher-Yates shuffle.
+            const shuffled = [...original]; // Create a shallow copy
             for (let i = shuffled.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -220,36 +155,18 @@ export class FileDataHandler extends DataHandler {
         }
         
         await this.dbManager.addData(tableName, sampledData);
-        if (this.alaDb && this.alaDb.tables[tableName]) {
-            (this.alaDb.tables[tableName] as any).data = sampledData;
-        }
         return true; // Sampled
     }
 
     async getSchemas(): Promise<TableSchema> {
         this.checkDbManager();
         const schemas: TableSchema = {};
-    
         for (const tableName of this.tableNames) {
-            const sample = await this.dbManager.getPreview(tableName, 50);
-            if (sample.length > 0) {
-                const columnTypes: Record<string, 'NUMBER' | 'TEXT'> = {};
-                const columns = Object.keys(sample[0]);
-    
-                for (const col of columns) {
-                    columnTypes[col] = 'NUMBER';
-                    for (const row of sample) {
-                        const value = row[col];
-                        if (typeof value !== 'number' && value !== null) {
-                             columnTypes[col] = 'TEXT';
-                             break;
-                        }
-                    }
-                }
-    
-                schemas[tableName] = columns.map(col => ({
-                    name: col,
-                    type: columnTypes[col],
+            const firstRecord = await this.dbManager.getPreview(tableName, 1);
+            if (firstRecord.length > 0) {
+                 schemas[tableName] = Object.keys(firstRecord[0]).map(key => ({
+                    name: key,
+                    type: typeof firstRecord[0][key] === 'number' ? 'NUMBER' : 'TEXT',
                 }));
             } else {
                 schemas[tableName] = [];
@@ -262,14 +179,40 @@ export class FileDataHandler extends DataHandler {
         this.checkDbManager();
         return this.dbManager.getPreview(tableName, rowCount);
     }
+    
+    private parseTablesFromQuery(query: string): Set<string> {
+        const tableRegex = /(?:FROM|JOIN)\s+\[?(\w+)\]?/ig;
+        const tablesInQuery = new Set<string>();
+        let match;
+        while ((match = tableRegex.exec(query)) !== null) {
+            tablesInQuery.add(match[1]);
+        }
+        return tablesInQuery;
+    }
 
     async executeQuery(query: string): Promise<Record<string, any>[]> {
         this.checkDbManager();
-        if (!this.alaDb) {
-            throw new QueryExecutionError("In-memory database not ready. Please load files first.");
-        }
         try {
-            return this.alaDb.exec(query);
+            const tablesInQuery = this.parseTablesFromQuery(query);
+            if (tablesInQuery.size === 0) return alasql(query);
+
+            const tempDb = new alasql.Database();
+            for (const tableNameFromQuery of tablesInQuery) {
+                // Perform a case-insensitive lookup to find the actual table name in IndexedDB.
+                const actualTableName = this.tableNames.find(
+                    storedName => storedName.toLowerCase() === tableNameFromQuery.toLowerCase()
+                );
+
+                if (actualTableName) {
+                    const data = await this.dbManager.getData(actualTableName);
+                    tempDb.exec(`CREATE TABLE [${tableNameFromQuery}]`);
+                    if (data) {
+                        (tempDb.tables[tableNameFromQuery] as any).data = data;
+                    }
+                }
+            }
+            
+            return tempDb.exec(query);
         } catch (e: any) {
             let friendlyMessage = e.message;
             if (typeof friendlyMessage === 'string') {
@@ -297,7 +240,6 @@ export class FileDataHandler extends DataHandler {
             await this.dbManager.deleteDatabase();
             this.dbManager = null;
             this.tableNames = [];
-            this.alaDb = null;
         }
     }
 
@@ -308,6 +250,7 @@ export class FileDataHandler extends DataHandler {
 
     async getCorrections(limit: number): Promise<Correction[]> {
         this.checkDbManager();
+        // FIX: Cast the result from getData to Correction[] as we know the data shape for this store.
         const allCorrections = await this.dbManager.getData(CORRECTIONS_STORE_NAME) as Correction[];
         return allCorrections.slice(-limit);
     }

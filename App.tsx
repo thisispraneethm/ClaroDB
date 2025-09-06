@@ -5,13 +5,11 @@ import HomePage from './pages/HomePage';
 import AnalyzePage from './pages/AnalyzePage';
 import EngineerJoinPage from './pages/EngineerJoinPage';
 import EnterpriseDBPage from './pages/EnterpriseDBPage';
-import { AppProvider } from './contexts/Providers';
+import { AppProvider } from './contexts/AppContext';
 import DemoWorkspacePage from './pages/DemoWorkspacePage';
 import Footer from './components/Footer';
 import { Menu, X } from 'lucide-react';
 import AboutPage from './pages/AboutPage';
-import { ToastProvider } from './contexts/ToastContext';
-import { ToastContainer } from './components/Toast';
 
 const AppContent: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -45,7 +43,6 @@ const AppContent: React.FC = () => {
         </main>
         <Footer />
       </div>
-      <ToastContainer />
     </div>
   );
 };
@@ -53,11 +50,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AppProvider>
-      <ToastProvider>
-        <HashRouter>
-          <AppContent />
-        </HashRouter>
-      </ToastProvider>
+      <HashRouter>
+        <AppContent />
+      </HashRouter>
     </AppProvider>
   );
 };

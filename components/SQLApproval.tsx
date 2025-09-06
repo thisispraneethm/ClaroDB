@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { sql } from 'react-syntax-highlighter/dist/esm/languages/hljs';
 import { github } from 'react-syntax-highlighter/dist/esm/styles/hljs';
@@ -15,29 +15,19 @@ const SQLApproval: React.FC<SQLApprovalProps> = ({ sqlResult, onExecute }) => {
   const [editedSql, setEditedSql] = useState(sqlResult.sql);
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [lineNumbers, setLineNumbers] = useState('1');
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
-  const lineNumbersRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
       setEditedSql(sqlResult.sql);
   }, [sqlResult.sql]);
 
   useEffect(() => {
-    if (textAreaRef.current) {
-        const lineCount = editedSql.split('\n').length;
-        setLineNumbers(Array.from({ length: lineCount }, (_, i) => i + 1).join('\n'));
-        
+    if (isEditing && textAreaRef.current) {
+        textAreaRef.current.focus();
         textAreaRef.current.style.height = 'inherit';
         textAreaRef.current.style.height = `${textAreaRef.current.scrollHeight}px`;
     }
-  }, [editedSql, isEditing]);
-
-  const handleScroll = useCallback(() => {
-    if (lineNumbersRef.current && textAreaRef.current) {
-        lineNumbersRef.current.scrollTop = textAreaRef.current.scrollTop;
-    }
-  }, []);
+  }, [isEditing, editedSql]);
 
   const copySqlToClipboard = () => {
     navigator.clipboard.writeText(editedSql);
@@ -69,26 +59,13 @@ const SQLApproval: React.FC<SQLApprovalProps> = ({ sqlResult, onExecute }) => {
             </div>
           </div>
           {isEditing ? (
-              <div className="flex font-mono text-sm max-h-80 overflow-y-hidden">
-                <div 
-                    ref={lineNumbersRef}
-                    className="p-4 pr-2 text-right text-text-secondary/50 select-none bg-black/5 overflow-y-hidden"
-                    aria-hidden="true"
-                    style={{ lineHeight: '1.5rem' }}
-                >
-                  <pre className="m-0">{lineNumbers}</pre>
-                </div>
-                <textarea
-                    ref={textAreaRef}
-                    value={editedSql}
-                    onChange={(e) => setEditedSql(e.target.value)}
-                    onScroll={handleScroll}
-                    className="w-full p-4 pl-3 font-mono text-sm bg-transparent focus:outline-none resize-none overflow-y-auto"
-                    style={{ lineHeight: '1.5rem' }}
-                    rows={1}
-                    spellCheck="false"
-                />
-              </div>
+              <textarea
+                ref={textAreaRef}
+                value={editedSql}
+                onChange={(e) => setEditedSql(e.target.value)}
+                className="w-full p-4 font-mono text-sm bg-transparent focus:outline-none resize-none overflow-hidden"
+                rows={Math.max(5, editedSql.split('\n').length)}
+              />
           ) : (
             <SyntaxHighlighter language="sql" style={github} customStyle={{ background: 'transparent', padding: '1rem', margin: 0, fontSize: '0.8rem' }} wrapLines={true}>
               {editedSql}

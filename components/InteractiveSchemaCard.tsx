@@ -39,25 +39,21 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
   activeJoinColumns,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
-  const dragStartOffset = useRef<Point>({ x: 0, y: 0 });
-  const animationFrameRef = useRef<number | null>(null);
+  const dragStartPos = useRef<Point>({ x: 0, y: 0 });
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     onDragStart?.(tableName);
     setIsDragging(true);
-    dragStartOffset.current = {
+    dragStartPos.current = {
       x: e.clientX - position.x,
       y: e.clientY - position.y,
     };
     
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = requestAnimationFrame(() => {
-        onDrag(tableName, {
-          x: moveEvent.clientX - dragStartOffset.current.x,
-          y: moveEvent.clientY - dragStartOffset.current.y,
-        });
+      onDrag(tableName, {
+        x: moveEvent.clientX - dragStartPos.current.x,
+        y: moveEvent.clientY - dragStartPos.current.y,
       });
     };
 
@@ -65,13 +61,12 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
       setIsDragging(false);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       onDragEnd?.();
     };
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-  }, [position.x, position.y, onDrag, tableName, onDragStart, onDragEnd]);
+  }, [position, onDrag, tableName, onDragStart, onDragEnd]);
   
 
   return (
@@ -132,4 +127,4 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
   );
 };
 
-export default React.memo(InteractiveSchemaCard);
+export default InteractiveSchemaCard;

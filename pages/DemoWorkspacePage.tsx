@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TableSchema } from '../types';
 import { Loader2, User, Bot } from 'lucide-react';
-import { useDemoContext } from '../contexts/DemoContext';
-import { useServiceContext } from '../contexts/ServiceContext';
+import { useAppContext } from '../contexts/AppContext';
 import { useAnalysis } from '../hooks/useAnalysis';
 import ChatInput from '../components/ChatInput';
 import WelcomeMessage from '../components/WelcomeMessage';
@@ -12,15 +11,11 @@ const DemoWorkspacePage: React.FC = () => {
   const { 
     demoHandler: handler, 
     llmProvider, 
-    isInitialized,
-  } = useServiceContext();
-
-  const {
-    conversation, 
-    setConversation,
-    chatSession,
-    setChatSession
-  } = useDemoContext();
+    demoConversation, 
+    setDemoConversation,
+    demoHistory,
+    setDemoHistory
+  } = useAppContext();
 
   const [schemas, setSchemas] = useState<TableSchema | null>(null);
   const [isLoadingSchema, setIsLoadingSchema] = useState(true);
@@ -35,34 +30,32 @@ const DemoWorkspacePage: React.FC = () => {
   } = useAnalysis({
       handler,
       llmProvider,
-      conversation,
-      setConversation,
-      chatSession,
-      setChatSession,
+      conversation: demoConversation,
+      setConversation: setDemoConversation,
+      history: demoHistory,
+      setHistory: setDemoHistory
   });
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
-  }, [conversation, isProcessing]);
+  }, [demoConversation, isProcessing]);
 
   useEffect(() => {
-    if (isInitialized) {
-      const fetchSchema = async () => {
-        setIsLoadingSchema(true);
-        try {
-          const s = await handler.getSchemas();
-          setSchemas(s);
-        } catch (e) {
-          console.error("Failed to fetch demo schema", e);
-        } finally {
-          setIsLoadingSchema(false);
-        }
-      };
-      fetchSchema();
-    }
-  }, [isInitialized, handler]);
+    const fetchSchema = async () => {
+      setIsLoadingSchema(true);
+      try {
+        const s = await handler.getSchemas();
+        setSchemas(s);
+      } catch (e) {
+        console.error("Failed to fetch demo schema", e);
+      } finally {
+        setIsLoadingSchema(false);
+      }
+    };
+    fetchSchema();
+  }, [handler]);
 
   const handleExampleQuery = (query: string) => {
     setQuestion(query);
@@ -90,7 +83,7 @@ const DemoWorkspacePage: React.FC = () => {
                   <span className="ml-4 text-text-secondary">Loading demo workspace...</span>
               </div>
           ) : (
-              conversation.length === 0 && (
+              demoConversation.length === 0 && (
                   <WelcomeMessage
                     title="🚀 Demo Workspace"
                     description="This workspace is pre-loaded with a sample sales dataset. Ask a question or click an example to get started!"
@@ -100,7 +93,7 @@ const DemoWorkspacePage: React.FC = () => {
               )
           )}
           
-          {conversation.map((turn) => (
+          {demoConversation.map((turn) => (
             <React.Fragment key={turn.id}>
               <div className="flex items-start justify-end group animate-fade-in-up">
                 <div className="bg-primary text-primary-foreground rounded-xl rounded-br-none p-4 max-w-2xl shadow-md">
