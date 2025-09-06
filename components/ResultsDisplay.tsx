@@ -385,161 +385,184 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
     if (chartLoading) {
       return <div className="text-center py-8 text-text-secondary flex items-center justify-center"><Loader2 size={20} className="animate-spin mr-2" /> Generating chart...</div>;
     }
-    if (!editableChartConfig || !data || data.length === 0) return (
-        <div className="bg-secondary-background rounded-lg border border-border">
-            {chartResult && (
-              <div className="px-4 py-2 border-b border-border">
-                <MetadataDisplay
-                    label="Chart Generation"
-                    model={chartResult.model}
-                    cost={chartResult.cost}
-                    prompt_tokens={chartResult.prompt_tokens}
-                    completion_tokens={chartResult.completion_tokens}
-                />
-              </div>
-            )}
-            <div className="text-center py-8 text-text-secondary">Chart could not be generated for this query.</div>
-        </div>
-    );
-    const { chartType, dataKeys, nameKey, title, composedTypes } = editableChartConfig;
-
-    return (
-      <div className="w-full bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card">
-        <div className="px-4 py-2 border-b border-black/5">
-          <MetadataDisplay
-              label="Chart Generation"
-              model={chartResult!.model}
-              cost={chartResult!.cost}
-              prompt_tokens={chartResult!.prompt_tokens}
-              completion_tokens={chartResult!.completion_tokens}
+  
+    // A chart has been successfully generated and is ready to be displayed.
+    if (editableChartConfig && data && data.length > 0) {
+      const { chartType, dataKeys, nameKey, title, composedTypes } = editableChartConfig;
+      return (
+        <div className="w-full bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card">
+          <div className="px-4 py-2 border-b border-black/5">
+            <MetadataDisplay
+                label="Chart Generation"
+                model={chartResult!.model}
+                cost={chartResult!.cost}
+                prompt_tokens={chartResult!.prompt_tokens}
+                completion_tokens={chartResult!.completion_tokens}
+            />
+          </div>
+          <ChartControls
+            config={editableChartConfig}
+            setConfig={setEditableChartConfig}
+            numericColumns={numericColumns}
+            categoricalColumns={categoricalColumns}
+            allColumns={allColumns}
           />
-        </div>
-        <ChartControls
-          config={editableChartConfig}
-          setConfig={setEditableChartConfig}
-          numericColumns={numericColumns}
-          categoricalColumns={categoricalColumns}
-          allColumns={allColumns}
-        />
-        <div className="h-96 w-full p-4" ref={chartContainerRef}>
-            <h4 className="text-center font-semibold mb-4 text-text">{title}</h4>
-            <ResponsiveContainer>
-              {(() => {
-                const tickProps = { fontSize: 11, fill: '#5A6474', dy: 5 };
-                switch (chartType) {
-                  case 'bar':
-                    return (
-                      <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                        <defs>
-                          <filter id="bar-shadow" x="-20%" y="-20%" width="140%" height="140%">
-                             <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor={PALETTE[0]} floodOpacity="0.3"/>
-                          </filter>
-                        </defs>
-                        <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
-                        <XAxis dataKey={nameKey} tickLine={false} axisLine={false} tick={tickProps} />
-                        <YAxis tickLine={false} axisLine={false} tick={tickProps} />
-                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
-                        <Legend wrapperStyle={{fontSize: "12px"}} />
-                        <Bar dataKey={dataKeys[0]} fill={PALETTE[0]} radius={[6, 6, 0, 0]} style={{ filter: 'url(#bar-shadow)' }}/>
-                      </BarChart>
-                    );
-                   case 'stackedBar':
-                        return (
-                          <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                            <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
-                            <XAxis dataKey={nameKey} tickLine={false} axisLine={false} tick={tickProps} />
-                            <YAxis tickLine={false} axisLine={false} tick={tickProps} />
-                            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
-                            <Legend wrapperStyle={{fontSize: "12px"}}/>
-                            {dataKeys.map((key, i) => (
-                                <Bar key={key} dataKey={key} stackId="a" fill={PALETTE[i % PALETTE.length]} radius={i === dataKeys.length - 1 ? [6, 6, 0, 0] : [0,0,0,0]} />
-                            ))}
-                          </BarChart>
-                        );
-                  case 'line':
-                    return (
-                      <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                           <defs>
-                              <filter id="line-shadow" x="-50%" y="-50%" width="200%" height="200%">
-                                  <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor={PALETTE[0]} floodOpacity="0.4"/>
-                              </filter>
+          <div className="h-96 w-full p-4" ref={chartContainerRef}>
+              <h4 className="text-center font-semibold mb-4 text-text">{title}</h4>
+              <ResponsiveContainer>
+                {(() => {
+                  const tickProps = { fontSize: 11, fill: '#5A6474', dy: 5 };
+                  switch (chartType) {
+                    case 'bar':
+                      return (
+                        <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                          <defs>
+                            <filter id="bar-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                               <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor={PALETTE[0]} floodOpacity="0.3"/>
+                            </filter>
                           </defs>
                           <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
                           <XAxis dataKey={nameKey} tickLine={false} axisLine={false} tick={tickProps} />
                           <YAxis tickLine={false} axisLine={false} tick={tickProps} />
-                          <Tooltip content={<CustomTooltip />} cursor={{ stroke: PALETTE[0], strokeWidth: 1, strokeDasharray: "4 4" }}/>
-                          <Legend wrapperStyle={{fontSize: "12px"}}/>
-                          <Line type="monotone" dataKey={dataKeys[0]} stroke={PALETTE[0]} strokeWidth={2.5} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: PALETTE[0] }} style={{ filter: 'url(#line-shadow)' }}/>
-                      </LineChart>
-                    );
-                  case 'area':
-                        return (
-                          <AreaChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
+                          <Legend wrapperStyle={{fontSize: "12px"}} />
+                          <Bar dataKey={dataKeys[0]} fill={PALETTE[0]} radius={[6, 6, 0, 0]} style={{ filter: 'url(#bar-shadow)' }}/>
+                        </BarChart>
+                      );
+                     case 'stackedBar':
+                          return (
+                            <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                              <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
+                              <XAxis dataKey={nameKey} tickLine={false} axisLine={false} tick={tickProps} />
+                              <YAxis tickLine={false} axisLine={false} tick={tickProps} />
+                              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
+                              <Legend wrapperStyle={{fontSize: "12px"}}/>
+                              {dataKeys.map((key, i) => (
+                                  <Bar key={key} dataKey={key} stackId="a" fill={PALETTE[i % PALETTE.length]} radius={i === dataKeys.length - 1 ? [6, 6, 0, 0] : [0,0,0,0]} />
+                              ))}
+                            </BarChart>
+                          );
+                    case 'line':
+                      return (
+                        <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                              <defs>
-                              <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor={PALETTE[0]} stopOpacity={0.4}/>
-                                <stop offset="95%" stopColor={PALETTE[0]} stopOpacity={0.05}/>
-                              </linearGradient>
-                              <filter id="line-shadow" x="-50%" y="-50%" width="200%" height="200%">
-                                <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor={PALETTE[0]} floodOpacity="0.4"/>
-                              </filter>
+                                <filter id="line-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                                    <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor={PALETTE[0]} floodOpacity="0.4"/>
+                                </filter>
                             </defs>
                             <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
                             <XAxis dataKey={nameKey} tickLine={false} axisLine={false} tick={tickProps} />
                             <YAxis tickLine={false} axisLine={false} tick={tickProps} />
-                            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
+                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: PALETTE[0], strokeWidth: 1, strokeDasharray: "4 4" }}/>
                             <Legend wrapperStyle={{fontSize: "12px"}}/>
-                            <Area type="monotone" dataKey={dataKeys[0]} stroke={PALETTE[0]} strokeWidth={2.5} fill="url(#areaGradient)" dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: PALETTE[0] }} style={{ filter: 'url(#line-shadow)' }} />
-                          </AreaChart>
-                        );
-                  case 'composed':
-                        return (
-                            <ComposedChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                                <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
-                                <XAxis dataKey={nameKey} tickLine={false} axisLine={false} tick={tickProps} />
-                                <YAxis tickLine={false} axisLine={false} tick={tickProps} />
-                                <Tooltip content={<CustomTooltip />} />
-                                <Legend wrapperStyle={{fontSize: "12px"}}/>
-                                {dataKeys.map((key, i) => {
-                                    const type = composedTypes?.[i] || 'bar';
-                                    const color = PALETTE[i % PALETTE.length];
-                                    switch (type) {
-                                        case 'line': return <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={2.5} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: color }} />;
-                                        case 'area': return <Area key={key} type="monotone" dataKey={key} fill={color} stroke={color} fillOpacity={0.6} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: color }} />;
-                                        default: return <Bar key={key} dataKey={key} fill={color} radius={[6, 6, 0, 0]} />;
-                                    }
-                                })}
-                            </ComposedChart>
-                        );
-                  case 'pie':
-                    return (
-                      <PieChart>
-                        <Pie 
-                          data={data} 
-                          dataKey={dataKeys[0]} 
-                          nameKey={nameKey} 
-                          cx="50%" 
-                          cy="50%" 
-                          outerRadius={'80%'}
-                          innerRadius={'60%'}
-                          stroke="#F8F9FC"
-                          strokeWidth={3}
-                          paddingAngle={3}
-                          // FIX: The `cornerRadius` prop belongs on the <Pie> component, not on individual <Cell>s.
-                          cornerRadius={8}
-                        >
-                          {data.map((entry, index) => <Cell key={`cell-${index}`} fill={PALETTE[index % PALETTE.length]} />)}
-                        </Pie>
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend wrapperStyle={{fontSize: "12px"}}/>
-                      </PieChart>
-                    );
-                  default:
-                      return <div className="text-center py-8 text-text-secondary">Unsupported chart type: {chartType}</div>;
-                }
-              })()}
-            </ResponsiveContainer>
+                            <Line type="monotone" dataKey={dataKeys[0]} stroke={PALETTE[0]} strokeWidth={2.5} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: PALETTE[0] }} style={{ filter: 'url(#line-shadow)' }}/>
+                        </LineChart>
+                      );
+                    case 'area':
+                          return (
+                            <AreaChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                               <defs>
+                                <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor={PALETTE[0]} stopOpacity={0.4}/>
+                                  <stop offset="95%" stopColor={PALETTE[0]} stopOpacity={0.05}/>
+                                </linearGradient>
+                                <filter id="line-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                                  <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor={PALETTE[0]} floodOpacity="0.4"/>
+                                </filter>
+                              </defs>
+                              <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
+                              <XAxis dataKey={nameKey} tickLine={false} axisLine={false} tick={tickProps} />
+                              <YAxis tickLine={false} axisLine={false} tick={tickProps} />
+                              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
+                              <Legend wrapperStyle={{fontSize: "12px"}}/>
+                              <Area type="monotone" dataKey={dataKeys[0]} stroke={PALETTE[0]} strokeWidth={2.5} fill="url(#areaGradient)" dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: PALETTE[0] }} style={{ filter: 'url(#line-shadow)' }} />
+                            </AreaChart>
+                          );
+                    case 'composed':
+                          return (
+                              <ComposedChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                                  <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
+                                  <XAxis dataKey={nameKey} tickLine={false} axisLine={false} tick={tickProps} />
+                                  <YAxis tickLine={false} axisLine={false} tick={tickProps} />
+                                  <Tooltip content={<CustomTooltip />} />
+                                  <Legend wrapperStyle={{fontSize: "12px"}}/>
+                                  {dataKeys.map((key, i) => {
+                                      const type = composedTypes?.[i] || 'bar';
+                                      const color = PALETTE[i % PALETTE.length];
+                                      switch (type) {
+                                          case 'line': return <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={2.5} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: color }} />;
+                                          case 'area': return <Area key={key} type="monotone" dataKey={key} fill={color} stroke={color} fillOpacity={0.6} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: color }} />;
+                                          default: return <Bar key={key} dataKey={key} fill={color} radius={[6, 6, 0, 0]} />;
+                                      }
+                                  })}
+                              </ComposedChart>
+                          );
+                    case 'pie':
+                      return (
+                        <PieChart>
+                          <Pie 
+                            data={data} 
+                            dataKey={dataKeys[0]} 
+                            nameKey={nameKey} 
+                            cx="50%" 
+                            cy="50%" 
+                            outerRadius={'80%'}
+                            innerRadius={'60%'}
+                            stroke="#F8F9FC"
+                            strokeWidth={3}
+                            paddingAngle={3}
+                            cornerRadius={8}
+                          >
+                            {data.map((entry, index) => <Cell key={`cell-${index}`} fill={PALETTE[index % PALETTE.length]} />)}
+                          </Pie>
+                          <Tooltip content={<CustomTooltip />} />
+                          <Legend wrapperStyle={{fontSize: "12px"}}/>
+                        </PieChart>
+                      );
+                    default:
+                        return <div className="text-center py-8 text-text-secondary">Unsupported chart type: {chartType}</div>;
+                  }
+                })()}
+              </ResponsiveContainer>
+          </div>
         </div>
+      );
+    }
+  
+    // Handle all other states (initial, failed, no data).
+    const hasAttempted = chartResult !== undefined;
+    const hasData = data && data.length > 0;
+  
+    let content: React.ReactNode;
+  
+    if (!hasData) {
+      content = <div className="text-center py-8 text-text-secondary">No data available to generate a chart.</div>;
+    } else if (hasAttempted) { // Attempted but failed (since editableChartConfig is null)
+      content = <div className="text-center py-8 text-text-secondary">Chart could not be generated for this query.</div>;
+    } else { // Not attempted yet, initial state.
+      content = (
+        <div className="text-center py-8 text-text-secondary flex flex-col items-center gap-3">
+          <BarChart2 size={24} />
+          <span>Click the "Generate Chart" button to visualize these results.</span>
+        </div>
+      );
+    }
+  
+    return (
+      <div className="bg-secondary-background rounded-lg border border-border">
+        {/* Show metadata only if an attempt was made and failed */}
+        {hasAttempted && !editableChartConfig && chartResult && (
+          <div className="px-4 py-2 border-b border-border">
+            <MetadataDisplay
+              label="Chart Generation"
+              model={chartResult.model}
+              cost={chartResult.cost}
+              prompt_tokens={chartResult.prompt_tokens}
+              completion_tokens={chartResult.completion_tokens}
+            />
+          </div>
+        )}
+        {content}
       </div>
     );
   };
@@ -592,21 +615,41 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
         if (insightsLoading) {
             return <div className="text-center py-8 text-text-secondary flex items-center justify-center"><Loader2 size={20} className="animate-spin mr-2" /> Generating insights...</div>;
         }
+
+        if (insightsResult) {
+            return (
+                <div className="bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card">
+                    <div className="px-4 py-2 border-b border-black/5">
+                        <MetadataDisplay
+                            label="Insight Generation"
+                            model={insightsResult.model}
+                            cost={insightsResult.cost}
+                            prompt_tokens={insightsResult.prompt_tokens}
+                            completion_tokens={insightsResult.completion_tokens}
+                        />
+                    </div>
+                    <div ref={insightsContainerRef} className="prose prose-sm max-w-none p-6 text-text prose-headings:text-text prose-strong:text-text">
+                        <ReactMarkdown>{insightsResult.insights}</ReactMarkdown>
+                    </div>
+                </div>
+            );
+        }
+
+        if (data.length === 0) {
+            return (
+                <div className="bg-secondary-background rounded-lg border border-border">
+                    <div className="text-center py-8 text-text-secondary">
+                        No data available to generate insights.
+                    </div>
+                </div>
+            );
+        }
+        
         return (
-            <div className="bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card">
-                {insightsResult && (
-                  <div className="px-4 py-2 border-b border-black/5">
-                    <MetadataDisplay
-                        label="Insight Generation"
-                        model={insightsResult.model}
-                        cost={insightsResult.cost}
-                        prompt_tokens={insightsResult.prompt_tokens}
-                        completion_tokens={insightsResult.completion_tokens}
-                    />
-                  </div>
-                )}
-                <div ref={insightsContainerRef} className="prose prose-sm max-w-none p-6 text-text prose-headings:text-text prose-strong:text-text">
-                    <ReactMarkdown>{insightsResult?.insights || ''}</ReactMarkdown>
+            <div className="bg-secondary-background rounded-lg border border-border">
+                <div className="text-center py-8 text-text-secondary flex flex-col items-center gap-3">
+                    <Lightbulb size={24} />
+                    <span>Click the "Generate Insight Summary" button to get an AI-powered analysis.</span>
                 </div>
             </div>
         );
@@ -640,13 +683,13 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
           </div>
           <div className="flex items-center space-x-4">
             {!hasInsights && activeTab === 'insights' && (
-                <button onClick={() => onGenerateInsights(turn.id)} disabled={insightsLoading} className="text-xs font-semibold text-primary hover:text-primary/80 disabled:opacity-50 flex items-center">
+                <button onClick={() => onGenerateInsights(turn.id)} disabled={insightsLoading || data.length === 0} className="text-xs font-semibold text-primary hover:text-primary/80 disabled:opacity-50 flex items-center">
                     {insightsLoading && <Loader2 size={14} className="animate-spin mr-1.5" />}
                     Generate Insight Summary
                 </button>
             )}
             {!hasChart && activeTab === 'chart' && (
-                <button onClick={() => onGenerateChart(turn.id)} disabled={chartLoading} className="text-xs font-semibold text-primary hover:text-primary/80 disabled:opacity-50 flex items-center">
+                <button onClick={() => onGenerateChart(turn.id)} disabled={chartLoading || data.length === 0} className="text-xs font-semibold text-primary hover:text-primary/80 disabled:opacity-50 flex items-center">
                     {chartLoading && <Loader2 size={14} className="animate-spin mr-1.5" />}
                     Generate Chart
                 </button>
