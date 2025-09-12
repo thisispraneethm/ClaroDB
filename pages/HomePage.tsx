@@ -57,7 +57,7 @@ const HomePage: React.FC = () => {
             <FeatureCard
                 icon={<DatabaseZap size={24} />}
                 title="Connect to a Database"
-                description="Connect to your enterprise database. Visualize schemas and run queries with our intuitive modeling canvas. (Coming soon)"
+                description="Connect to a simulated enterprise database to visualize schemas and run queries with our intuitive modeling canvas."
                 to="/enterprise-db"
                 linkText="Connect to DB"
             />

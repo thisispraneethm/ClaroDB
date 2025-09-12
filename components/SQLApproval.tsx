@@ -5,7 +5,6 @@ import { github } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import { SQLGenerationResult } from '../types';
 import { Copy, Check, AlertTriangle, Pencil, BrainCircuit } from 'lucide-react';
 
-// FIX: Define the props interface for the component.
 interface SQLApprovalProps {
   sqlResult: SQLGenerationResult;
   onExecute: (sql: string) => void;

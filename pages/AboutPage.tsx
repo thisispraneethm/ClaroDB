@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Cpu, Layers3, Zap } from 'lucide-react';
+import { ShieldCheck, Cpu, Layers3, Zap, Database } from 'lucide-react';
 
 const AboutPage: React.FC = () => {
   const TechCard = ({ icon, title, children }: { icon: React.ReactNode, title: string, children: React.ReactNode }) => (
@@ -42,7 +42,7 @@ const AboutPage: React.FC = () => {
                 </p>
                 <ul className="mt-4 space-y-2 text-sm text-text-secondary">
                   <li className="flex items-start"><Cpu size={16} className="mr-3 mt-1 text-primary flex-shrink-0" /><span><strong>Client-Side Processing:</strong> Files are parsed and queried directly on your machine. The only data sent to the cloud is the anonymous table schema (column names and types) and your natural language question to the AI model. Your raw data rows are never sent.</span></li>
-                  <li className="flex items-start"><Cpu size={16} className="mr-3 mt-1 text-primary flex-shrink-0" /><span><strong>In-Memory & IndexedDB:</strong> Data is loaded into your browser's memory for analysis and stored in IndexedDB for persistence across sessions, not on a remote server. This ensures your data remains private and secure.</span></li>
+                  <li className="flex items-start"><Database size={16} className="mr-3 mt-1 text-primary flex-shrink-0" /><span><strong>In-Memory & IndexedDB:</strong> Data is loaded into your browser's memory for analysis and stored in IndexedDB for persistence across sessions, not on a remote server. This ensures your data remains private and secure.</span></li>
                 </ul>
               </div>
             </div>

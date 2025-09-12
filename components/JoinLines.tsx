@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { Join, Point } from '../types';
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -22,66 +22,63 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
   const [linePositions, setLinePositions] = useState<LinePosition[]>([]);
   const svgRef = useRef<SVGSVGElement>(null);
   const animatedPositionsRef = useRef<Record<string, { p1: Point; p2: Point }>>({});
-  // FIX: The useRef hook requires an initial value. Provided `undefined` to fix the "Expected 1 arguments, but got 0" error.
-  const animationFrameIdRef = useRef<number | undefined>(undefined);
+
+  const getTargetPositions = useCallback(() => {
+    const canvas = svgRef.current?.parentElement;
+    if (!canvas) return {};
+    
+    const targets: Record<string, { p1: Point; p2: Point; join: Join }> = {};
+    const canvasRect = canvas.getBoundingClientRect();
+
+    joins.forEach(join => {
+      const el1 = document.getElementById(`col-${join.table1}-${join.column1}`);
+      const el2 = document.getElementById(`col-${join.table2}-${join.column2}`);
+
+      if (el1 && el2) {
+        const rect1 = el1.getBoundingClientRect();
+        const rect2 = el2.getBoundingClientRect();
+        
+        const p1 = {
+          x: rect1.left + rect1.width - canvasRect.left + canvas.scrollLeft,
+          y: rect1.top + rect1.height / 2 - canvasRect.top + canvas.scrollTop,
+        };
+        const p2 = {
+          x: rect2.left - canvasRect.left + canvas.scrollLeft,
+          y: rect2.top + rect2.height / 2 - canvasRect.top + canvas.scrollTop,
+        };
+        targets[join.id] = { p1, p2, join };
+      }
+    });
+    return targets;
+  }, [joins]);
 
   useLayoutEffect(() => {
-    const canvas = svgRef.current?.parentElement;
-    if (!canvas) return;
-
-    const getTargetPositions = () => {
-      const targets: Record<string, { p1: Point; p2: Point; join: Join }> = {};
-      const canvasRect = canvas.getBoundingClientRect();
-
-      joins.forEach(join => {
-        const el1 = document.getElementById(`col-${join.table1}-${join.column1}`);
-        const el2 = document.getElementById(`col-${join.table2}-${join.column2}`);
-
-        if (el1 && el2) {
-          const rect1 = el1.getBoundingClientRect();
-          const rect2 = el2.getBoundingClientRect();
-          
-          const p1 = {
-            x: rect1.left + rect1.width - canvasRect.left + canvas.scrollLeft,
-            y: rect1.top + rect1.height / 2 - canvasRect.top + canvas.scrollTop,
-          };
-          const p2 = {
-            x: rect2.left - canvasRect.left + canvas.scrollLeft,
-            y: rect2.top + rect2.height / 2 - canvasRect.top + canvas.scrollTop,
-          };
-          targets[join.id] = { p1, p2, join };
-        }
-      });
-      return targets;
-    };
+    let animationFrameId: number;
 
     const animate = () => {
       const targets = getTargetPositions();
       const currentAnimated = animatedPositionsRef.current;
 
+      // Initialize or update animated positions
       for (const id in targets) {
         if (!currentAnimated[id]) {
           currentAnimated[id] = { p1: targets[id].p1, p2: targets[id].p2 };
         }
         
-        const newP1 = {
-          x: lerp(currentAnimated[id].p1.x, targets[id].p1.x, 0.2),
-          y: lerp(currentAnimated[id].p1.y, targets[id].p1.y, 0.2),
-        };
-        const newP2 = {
-          x: lerp(currentAnimated[id].p2.x, targets[id].p2.x, 0.2),
-          y: lerp(currentAnimated[id].p2.y, targets[id].p2.y, 0.2),
-        };
-
-        currentAnimated[id] = { p1: newP1, p2: newP2 };
+        currentAnimated[id].p1.x = lerp(currentAnimated[id].p1.x, targets[id].p1.x, 0.2);
+        currentAnimated[id].p1.y = lerp(currentAnimated[id].p1.y, targets[id].p1.y, 0.2);
+        currentAnimated[id].p2.x = lerp(currentAnimated[id].p2.x, targets[id].p2.x, 0.2);
+        currentAnimated[id].p2.y = lerp(currentAnimated[id].p2.y, targets[id].p2.y, 0.2);
       }
       
+      // Garbage collect deleted joins
       for (const id in currentAnimated) {
           if (!targets[id]) {
               delete currentAnimated[id];
           }
       }
 
+      // Create new positions array for rendering
       const newPositions = Object.entries(currentAnimated).map(([id, points]) => ({
         id,
         ...points,
@@ -90,17 +87,17 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
 
       setLinePositions(newPositions);
 
-      animationFrameIdRef.current = requestAnimationFrame(animate);
+      animationFrameId = requestAnimationFrame(animate);
     };
 
-    animate();
+    // Start the animation loop
+    animationFrameId = requestAnimationFrame(animate);
 
+    // Cleanup function to cancel the animation frame on component unmount or dependency change
     return () => {
-      if (animationFrameIdRef.current) {
-        cancelAnimationFrame(animationFrameIdRef.current);
-      }
+      cancelAnimationFrame(animationFrameId);
     };
-  }, [joins, cardPositions]);
+  }, [joins, cardPositions, getTargetPositions]);
 
   return (
     <svg ref={svgRef} className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>

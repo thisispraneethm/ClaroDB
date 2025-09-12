@@ -24,6 +24,15 @@ const DEMO_TABLE_NAME = 'sales_data';
 const CORRECTIONS_STORE_NAME = 'corrections';
 const DEMO_DB_NAME = 'clarodb_demo_stable'; // Use a static name to prevent DB leaks
 
+// Type guard to validate the structure of Correction objects at runtime.
+function isCorrection(obj: any): obj is Correction {
+  return obj && typeof obj.question === 'string' && typeof obj.sql === 'string';
+}
+
+function isCorrectionArray(obj: any): obj is Correction[] {
+    return Array.isArray(obj) && obj.every(isCorrection);
+}
+
 export class DemoDataHandler extends DataHandler {
     private dbManager: IndexedDBManager | null = null;
 
@@ -144,8 +153,11 @@ export class DemoDataHandler extends DataHandler {
 
     async getCorrections(limit: number): Promise<Correction[]> {
         this.checkDbManager();
-        // FIX: Cast the result from getData to Correction[] as we know the data shape for this store.
-        const allCorrections = await this.dbManager.getData(CORRECTIONS_STORE_NAME) as Correction[];
+        const allCorrections = await this.dbManager.getData(CORRECTIONS_STORE_NAME);
+        if (!isCorrectionArray(allCorrections)) {
+            console.warn("Invalid data found in corrections store. Returning empty array.");
+            return [];
+        }
         // Return the most recent 'limit' corrections
         return allCorrections.slice(-limit);
     }

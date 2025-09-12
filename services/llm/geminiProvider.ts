@@ -6,9 +6,8 @@ import { config } from '../../config';
 import { enhancePromptWithSchemaAwareness } from '../../utils/promptEnhancer';
 import { Correction } from "../handlers/base";
 
-// Safari-specific fix: Detect Safari to alter the request payload structure.
-const isSafari = typeof navigator !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-
+// Type alias to handle potential legacy 'dataKey' property for backward compatibility.
+type ParsedChartConfig = ChartGenerationResult & { dataKey?: string };
 export class GeminiProvider extends LLMProvider {
   private ai: GoogleGenAI;
 
@@ -156,14 +155,7 @@ ${correctionHint}`;
 
     const currentQuestionStr = `--- Current Question ---\nBased on the conversation so far, generate a SQL query for this question: ${prompt}`;
 
-    // Safari-specific fix: Send content as an array of strings to avoid ReadableStream issue.
-    const contentsPayload = isSafari
-        ? [
-            systemPrompt,
-            ...(historyStr ? [`--- Conversation History ---\n${historyStr}`] : []),
-            currentQuestionStr
-          ]
-        : `${systemPrompt}\n\n${historyStr ? `--- Conversation History ---\n${historyStr}\n\n` : ''}${currentQuestionStr}`;
+    const contentsPayload = `${systemPrompt}\n\n${historyStr ? `--- Conversation History ---\n${historyStr}\n\n` : ''}${currentQuestionStr}`;
 
     try {
       const modelName = 'gemini-2.5-flash';
@@ -210,7 +202,7 @@ ${correctionHint}`;
     
     const userPrompt = `Context: The user asked "${question}".\nResult sample (first 50 rows):\n${dataPreview}`;
     
-    const contentsPayload = isSafari ? [systemInstruction, userPrompt] : `${systemInstruction}\n\n${userPrompt}`;
+    const contentsPayload = `${systemInstruction}\n\n${userPrompt}`;
 
     try {
       const modelName = 'gemini-2.5-flash';
@@ -271,7 +263,7 @@ OUTPUT REQUIREMENTS:
     
     const userPrompt = "Generate the chart configuration JSON for the provided context.";
 
-    const contentsPayload = isSafari ? [systemPrompt, userPrompt] : `${systemPrompt}\n\n${userPrompt}`;
+    const contentsPayload = `${systemPrompt}\n\n${userPrompt}`;
 
     try {
         const response = await this.ai.models.generateContent({
@@ -299,24 +291,19 @@ OUTPUT REQUIREMENTS:
         });
 
       const jsonStr = response.text.trim();
-      // FIX: The model might return a slightly malformed JSON. Find the start and end of the JSON object.
-      const jsonStart = jsonStr.indexOf('{');
-      const jsonEnd = jsonStr.lastIndexOf('}');
-      if (jsonStart === -1 || jsonEnd === -1) {
-          throw new Error("Generated response is not valid JSON.");
+      if (!jsonStr) {
+          throw new Error("Generated response is empty.");
       }
-      const correctedJsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
-
-      const chartConfig = JSON.parse(correctedJsonStr) as ChartGenerationResult;
+      
+      const chartConfig = JSON.parse(jsonStr) as ParsedChartConfig;
       const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
       const completionTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
       const cost = this.calculateCost(modelName, promptTokens, completionTokens);
       
       // Backwards compatibility for models that might still return dataKey
-      // @ts-ignore
       if (chartConfig.dataKey && !chartConfig.dataKeys) {
-        // @ts-ignore
         chartConfig.dataKeys = [chartConfig.dataKey];
+        delete chartConfig.dataKey;
       }
 
       return {

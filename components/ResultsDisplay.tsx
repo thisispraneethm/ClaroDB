@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-    PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart 
+    PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart
 } from 'recharts';
+import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 import ReactMarkdown from 'react-markdown';
 import { ConversationTurn, ChartGenerationResult } from '../types';
 import { Table, BarChart2, Lightbulb, ChevronLeft, ChevronRight, Loader2, FileDown, FileText, Printer, FileImage } from 'lucide-react';
@@ -17,18 +18,30 @@ type Tab = 'table' | 'insights' | 'chart';
 const ROWS_PER_PAGE = 50;
 const PALETTE = ['#007AFF', '#34C759', '#FF9500', '#FF3B30', '#5856D6', '#AF52DE'];
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+// Fix: The TooltipProps for a custom tooltip's content are not the same as the props for the Tooltip component.
+// Defining a specific interface for the content renderer's props resolves the type error.
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: {
+    name: NameType;
+    value: ValueType;
+    color?: string;
+  }[];
+  label?: string | number;
+}
+
+const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white/80 backdrop-blur-lg p-3 border border-black/10 rounded-xl shadow-2xl animate-scale-in text-text">
         <p className="font-bold text-sm mb-2 text-text">{label}</p>
-        {payload.map((pld: any, index: number) => (
+        {payload.map((pld, index: number) => (
             <div key={index} className="flex justify-between items-center text-sm font-medium my-1 gap-4">
                 <div className="flex items-center" style={{ color: pld.color }}>
                     <div className="w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: pld.color }}/>
                     <span>{pld.name}</span>
                 </div>
-                <span className="font-bold text-text">{pld.value.toLocaleString()}</span>
+                <span className="font-bold text-text">{pld.value?.toLocaleString()}</span>
             </div>
         ))}
       </div>
@@ -292,26 +305,28 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
   };
 
   const handlePrintInsights = () => {
-      if (!insightsContainerRef.current) return;
-      const content = insightsContainerRef.current.innerHTML;
+      if (!turn.insightsResult?.insights) return;
+      const markdownContent = turn.insightsResult.insights;
       const printWindow = window.open('', '_blank');
+      
       if (printWindow) {
+          const escapedContent = markdownContent
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#039;');
+
           printWindow.document.write(`
               <html>
                   <head>
                       <title>ClaroDB Insights</title>
                       <style>
-                          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; }
-                          h1, h2, h3, h4, h5, h6 { color: #111; }
-                          strong { font-weight: 600; }
-                          code { background-color: #f0f2f5; padding: 2px 5px; border-radius: 4px; font-family: monospace; }
-                          pre { background-color: #f0f2f5; padding: 1rem; border-radius: 8px; white-space: pre-wrap; word-wrap: break-word; }
-                          blockquote { border-left: 3px solid #d0d7de; padding-left: 1rem; margin-left: 0; color: #57606a; }
-                          ul { padding-left: 1.5rem; }
-                          hr { border: 0; border-top: 1px solid #d8dee4; margin: 1.5rem 0; }
+                          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; padding: 2rem; }
                           .print-header { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #d8dee4; }
                           .print-header h1 { font-size: 1.5rem; margin: 0; }
                           .print-header p { font-size: 0.9rem; color: #57606a; margin: 0.25rem 0 0; }
+                          pre { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: 1rem; }
                       </style>
                   </head>
                   <body>
@@ -319,7 +334,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
                         <h1>Query Insights</h1>
                         <p>For question: "${turn.question}"</p>
                       </div>
-                      ${content}
+                      <pre>${escapedContent}</pre>
                   </body>
               </html>
           `);
@@ -367,7 +382,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
           const url = URL.createObjectURL(svgBlob);
 
           img.onload = () => {
-              ctx.fillStyle = 'white'; // Set a white background
+              const bgElement = document.querySelector('.animated-bg-canvas');
+              ctx.fillStyle = bgElement ? getComputedStyle(bgElement).backgroundColor : '#F8F9FC';
               ctx.fillRect(0, 0, width, height);
               ctx.drawImage(img, 0, 0);
               URL.revokeObjectURL(url);

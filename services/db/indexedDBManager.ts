@@ -1,4 +1,3 @@
-
 export class IndexedDBManager {
     private db: IDBDatabase | null = null;
     private dbName: string;
@@ -9,34 +8,53 @@ export class IndexedDBManager {
     
     public open(storeNames: string[]): Promise<void> {
         return new Promise((resolve, reject) => {
+            const newVersion = (this.db?.version || 0) + 1;
+
             if (this.db) {
-                // If the stores haven't changed, we don't need to re-open/upgrade.
                 const existingStores = Array.from(this.db.objectStoreNames);
-                const sameStores = storeNames.length === existingStores.length && storeNames.every(s => existingStores.includes(s));
+                const allRequiredStores = new Set<string>();
+                storeNames.forEach(name => {
+                    allRequiredStores.add(name);
+                    // Also account for original data stores in file handlers
+                    if (!name.endsWith('_original') && !['corrections', 'corrections_enterprise'].includes(name)) {
+                        allRequiredStores.add(`${name}_original`);
+                    }
+                });
+                
+                const sameStores = existingStores.length === allRequiredStores.size && existingStores.every(s => allRequiredStores.has(s));
+                
                 if (sameStores) {
                     return resolve();
                 }
                 this.db.close(); // Close before upgrading
             }
 
-            const newVersion = Date.now(); // Use timestamp for a unique, always-increasing version
             const request = indexedDB.open(this.dbName, newVersion);
 
             request.onerror = () => reject(new Error("Failed to open IndexedDB."));
             
             request.onupgradeneeded = (event) => {
                 const db = (event.target as IDBOpenDBRequest).result;
-                const existingStores = Array.from(db.objectStoreNames);
+                const transaction = (event.target as IDBOpenDBRequest).transaction;
+                if (!transaction) return;
 
+                const allRequiredStores = new Set<string>();
+                storeNames.forEach(name => {
+                    allRequiredStores.add(name);
+                     if (!name.endsWith('_original') && !['corrections', 'corrections_enterprise'].includes(name)) {
+                        allRequiredStores.add(`${name}_original`);
+                    }
+                });
+                
                 // Delete stores that are no longer needed
-                existingStores.forEach(storeName => {
-                    if (!storeNames.includes(storeName)) {
+                Array.from(db.objectStoreNames).forEach(storeName => {
+                    if (!allRequiredStores.has(storeName)) {
                         db.deleteObjectStore(storeName);
                     }
                 });
 
                 // Create new stores
-                storeNames.forEach(storeName => {
+                allRequiredStores.forEach(storeName => {
                     if (!db.objectStoreNames.contains(storeName)) {
                         db.createObjectStore(storeName, { autoIncrement: true });
                     }
@@ -47,6 +65,11 @@ export class IndexedDBManager {
                 this.db = (event.target as IDBOpenDBRequest).result;
                 resolve();
             };
+            
+            request.onblocked = () => {
+                console.warn(`IndexedDB open request for "${this.dbName}" is blocked. This can happen if another tab has the database open with an older version.`);
+                reject(new Error("Database connection is blocked. Please close other tabs with this application and refresh."));
+            }
         });
     }
 

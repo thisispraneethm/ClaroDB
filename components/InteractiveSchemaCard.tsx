@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { ColumnSchema, Point } from '../types';
 import { Table2, GripVertical } from 'lucide-react';
 import DataTypeIcon from './DataTypeIcon';
@@ -38,27 +38,35 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
   compatibleTargets,
   activeJoinColumns,
 }) => {
-  const [isDragging, setIsDragging] = useState(false);
+  const [dragState, setDragState] = useState<{ isDragging: boolean; offset: Point }>({ isDragging: false, offset: { x: 0, y: 0 } });
   const dragStartPos = useRef<Point>({ x: 0, y: 0 });
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     onDragStart?.(tableName);
-    setIsDragging(true);
     dragStartPos.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y,
+      x: e.clientX,
+      y: e.clientY,
     };
     
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      onDrag(tableName, {
-        x: moveEvent.clientX - dragStartPos.current.x,
-        y: moveEvent.clientY - dragStartPos.current.y,
+      setDragState({
+        isDragging: true,
+        offset: {
+          x: moveEvent.clientX - dragStartPos.current.x,
+          y: moveEvent.clientY - dragStartPos.current.y,
+        }
       });
     };
 
-    const handleMouseUp = () => {
-      setIsDragging(false);
+    const handleMouseUp = (upEvent: MouseEvent) => {
+      const finalPosition = {
+        x: position.x + (upEvent.clientX - dragStartPos.current.x),
+        y: position.y + (upEvent.clientY - dragStartPos.current.y),
+      };
+      onDrag(tableName, finalPosition);
+
+      setDragState({ isDragging: false, offset: { x: 0, y: 0 } });
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       onDragEnd?.();
@@ -68,22 +76,27 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
     window.addEventListener('mouseup', handleMouseUp);
   }, [position, onDrag, tableName, onDragStart, onDragEnd]);
   
+  const currentPosition = {
+    left: position.x + dragState.offset.x,
+    top: position.y + dragState.offset.y,
+  };
 
   return (
     <div
-      className={`absolute bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-lg w-72 flex flex-col transition-all duration-200 hover:shadow-xl hover:scale-[1.02] select-none`}
+      className={`absolute bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-lg w-72 flex flex-col transition-shadow duration-200 hover:shadow-xl hover:scale-[1.02] select-none`}
       style={{
-        left: position.x,
-        top: position.y,
-        cursor: isDragging ? 'grabbing' : 'default',
-        zIndex: isDragging ? 20 : 10,
-        boxShadow: activeJoinColumns.size > 0 ? '0 0 20px 5px rgba(0, 122, 255, 0.25)' : undefined
+        left: currentPosition.left,
+        top: currentPosition.top,
+        cursor: dragState.isDragging ? 'grabbing' : 'default',
+        zIndex: dragState.isDragging ? 20 : 10,
+        boxShadow: activeJoinColumns.size > 0 ? '0 0 20px 5px rgba(0, 122, 255, 0.25)' : undefined,
+        transition: dragState.isDragging ? 'none' : 'all 0.2s',
       }}
     >
       <div
         className="flex items-center gap-2 p-3 border-b border-black/5"
         onMouseDown={handleMouseDown}
-        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+        style={{ cursor: dragState.isDragging ? 'grabbing' : 'grab' }}
       >
         <GripVertical size={18} className="text-text-secondary/50" />
         <Table2 size={16} className="text-text" />

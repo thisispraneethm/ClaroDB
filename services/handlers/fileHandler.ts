@@ -11,6 +11,15 @@ export interface FileSource {
 }
 const CORRECTIONS_STORE_NAME = 'corrections';
 
+// Type guard to validate the structure of Correction objects at runtime.
+function isCorrection(obj: any): obj is Correction {
+  return obj && typeof obj.question === 'string' && typeof obj.sql === 'string';
+}
+
+function isCorrectionArray(obj: any): obj is Correction[] {
+    return Array.isArray(obj) && obj.every(isCorrection);
+}
+
 export class FileDataHandler extends DataHandler {
     private dbManager: IndexedDBManager | null = null;
     private dbName: string;
@@ -37,6 +46,7 @@ export class FileDataHandler extends DataHandler {
     async loadFiles(sources: FileSource[]): Promise<void> {
         this.checkDbManager();
         this.tableNames = [];
+        const requiredStores = [CORRECTIONS_STORE_NAME];
 
         try {
             if (sources.length === 0) {
@@ -45,9 +55,8 @@ export class FileDataHandler extends DataHandler {
             }
             
             const workingStoreNames = sources.map(s => s.name);
-            const originalStoreNames = sources.map(s => `${s.name}_original`);
-            const storeNames = [...workingStoreNames, ...originalStoreNames, CORRECTIONS_STORE_NAME];
-            await this.dbManager.open(storeNames);
+            this.tableNames = workingStoreNames;
+            await this.dbManager.open([...workingStoreNames, ...requiredStores]);
             
             const tryParseStructured = (content: string): Record<string, any>[] | null => {
                 const delimiters = [',', '\t', ';', '|'];
@@ -100,7 +109,6 @@ export class FileDataHandler extends DataHandler {
                 // Store both the original data and the working copy. Sampling will affect the working copy only.
                 await this.dbManager.addData(`${source.name}_original`, data);
                 await this.dbManager.addData(source.name, data);
-                this.tableNames.push(source.name);
             }
         } catch (e: any) {
             await this.terminate();
@@ -162,12 +170,16 @@ export class FileDataHandler extends DataHandler {
         this.checkDbManager();
         const schemas: TableSchema = {};
         for (const tableName of this.tableNames) {
-            const firstRecord = await this.dbManager.getPreview(tableName, 1);
-            if (firstRecord.length > 0) {
-                 schemas[tableName] = Object.keys(firstRecord[0]).map(key => ({
-                    name: key,
-                    type: typeof firstRecord[0][key] === 'number' ? 'NUMBER' : 'TEXT',
-                }));
+            const previewData = await this.dbManager.getPreview(tableName, 50);
+            if (previewData.length > 0) {
+                 const headers = Object.keys(previewData[0]);
+                 schemas[tableName] = headers.map(key => {
+                     const isNumeric = previewData.every(row => {
+                         const value = row[key];
+                         return value === null || value === '' || typeof value === 'number';
+                     });
+                     return { name: key, type: isNumeric ? 'NUMBER' : 'TEXT' };
+                 });
             } else {
                 schemas[tableName] = [];
             }
@@ -250,8 +262,11 @@ export class FileDataHandler extends DataHandler {
 
     async getCorrections(limit: number): Promise<Correction[]> {
         this.checkDbManager();
-        // FIX: Cast the result from getData to Correction[] as we know the data shape for this store.
-        const allCorrections = await this.dbManager.getData(CORRECTIONS_STORE_NAME) as Correction[];
+        const allCorrections = await this.dbManager.getData(CORRECTIONS_STORE_NAME);
+        if (!isCorrectionArray(allCorrections)) {
+            console.warn("Invalid data found in corrections store. Returning empty array.");
+            return [];
+        }
         return allCorrections.slice(-limit);
     }
 }
