@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useLayoutEffect } from 'react';
 import { Send, Loader2, ArrowUp } from 'lucide-react';
 
 interface ChatInputProps {
@@ -11,6 +11,18 @@ interface ChatInputProps {
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({ value, onChange, onSend, isLoading, placeholder, disabled = false }) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      // Temporarily shrink to allow for accurate scrollHeight calculation
+      textarea.style.height = 'auto';
+      // Set the height to the scroll height to fit the content
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  }, [value]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -24,13 +36,14 @@ const ChatInput: React.FC<ChatInputProps> = ({ value, onChange, onSend, isLoadin
     <div className="bg-card/30 backdrop-blur-xl p-4 border-t border-white/20">
       <div className="relative max-w-4xl mx-auto">
         <textarea
+          ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder || "Ask a follow-up question..."}
-          className="w-full p-3.5 pr-14 border border-border rounded-xl focus:ring-2 focus:ring-ring focus:outline-none transition-all duration-200 resize-none bg-background/70 disabled:bg-secondary-background text-text placeholder-text-secondary shadow-sm"
+          className="w-full p-3.5 pr-14 border border-border rounded-xl focus:ring-2 focus:ring-ring focus:outline-none transition-all duration-200 resize-none bg-background/70 disabled:bg-secondary-background text-text placeholder-text-secondary shadow-sm overflow-y-hidden"
           rows={1}
-          style={{ paddingTop: '14px', paddingBottom: '14px', lineHeight: '1.5', minHeight: '54px' }}
+          style={{ minHeight: '54px', maxHeight: '200px' }}
           disabled={isLoading || disabled}
         />
         <button

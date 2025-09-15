@@ -9,6 +9,7 @@ export class IndexedDBManager {
     public open(storeNames: string[]): Promise<void> {
         return new Promise((resolve, reject) => {
             const newVersion = (this.db?.version || 0) + 1;
+            const createsOriginals = this.dbName.includes('_file_');
 
             if (this.db) {
                 const existingStores = Array.from(this.db.objectStoreNames);
@@ -16,7 +17,7 @@ export class IndexedDBManager {
                 storeNames.forEach(name => {
                     allRequiredStores.add(name);
                     // Also account for original data stores in file handlers
-                    if (!name.endsWith('_original') && !['corrections', 'corrections_enterprise'].includes(name)) {
+                    if (createsOriginals && !name.endsWith('_original')) {
                         allRequiredStores.add(`${name}_original`);
                     }
                 });
@@ -41,7 +42,7 @@ export class IndexedDBManager {
                 const allRequiredStores = new Set<string>();
                 storeNames.forEach(name => {
                     allRequiredStores.add(name);
-                     if (!name.endsWith('_original') && !['corrections', 'corrections_enterprise'].includes(name)) {
+                     if (createsOriginals && !name.endsWith('_original')) {
                         allRequiredStores.add(`${name}_original`);
                     }
                 });

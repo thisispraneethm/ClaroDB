@@ -305,28 +305,25 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
   };
 
   const handlePrintInsights = () => {
-      if (!turn.insightsResult?.insights) return;
-      const markdownContent = turn.insightsResult.insights;
+      if (!insightsContainerRef.current) return;
+      const contentToPrint = insightsContainerRef.current.innerHTML;
       const printWindow = window.open('', '_blank');
       
       if (printWindow) {
-          const escapedContent = markdownContent
-              .replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;')
-              .replace(/"/g, '&quot;')
-              .replace(/'/g, '&#039;');
-
           printWindow.document.write(`
               <html>
                   <head>
                       <title>ClaroDB Insights</title>
                       <style>
-                          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; padding: 2rem; }
-                          .print-header { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #d8dee4; }
+                          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1D2129; padding: 2rem; }
+                          .print-header { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #e1e4e8; }
                           .print-header h1 { font-size: 1.5rem; margin: 0; }
-                          .print-header p { font-size: 0.9rem; color: #57606a; margin: 0.25rem 0 0; }
-                          pre { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: 1rem; }
+                          .print-header p { font-size: 0.9rem; color: #5A6474; margin: 0.25rem 0 0; }
+                          h1, h2, h3, h4, h5, h6 { color: #1D2129; font-weight: 600; }
+                          ul, ol { padding-left: 20px; }
+                          li { margin-bottom: 0.5rem; }
+                          strong, b { font-weight: 600; color: #1D2129; }
+                          code { font-family: monospace; background-color: #f6f8fa; padding: 0.2em 0.4em; margin: 0; font-size: 85%; border-radius: 6px; }
                       </style>
                   </head>
                   <body>
@@ -334,7 +331,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
                         <h1>Query Insights</h1>
                         <p>For question: "${turn.question}"</p>
                       </div>
-                      <pre>${escapedContent}</pre>
+                      ${contentToPrint}
                   </body>
               </html>
           `);

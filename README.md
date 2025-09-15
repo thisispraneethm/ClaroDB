@@ -37,7 +37,7 @@ ClaroDB is an intelligent data workspace that allows you to connect to data sour
 3.  **Configure your API Key:**
     Create a `.env` file in the root of the project and add your Google Gemini API key. The application uses Vite to automatically load this variable.
     ```
-    GEMINI_API_KEY="YOUR_API_KEY_HERE"
+    API_KEY="YOUR_API_KEY_HERE"
     ```
 
 4.  **Start the development server:**
