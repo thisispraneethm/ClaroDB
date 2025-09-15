@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import Container from '../components/Container';
 import { Join, Point } from '../types';
@@ -71,7 +72,13 @@ const EngineerJoinPage: React.FC = () => {
   };
 
   const handleFilesChange = useCallback(async (newFiles: File[]) => {
-    resetWorkspace();
+    // Reset most state, but keep the new files in the UI temporarily
+    setSchemas(null);
+    setPreviewData({});
+    setTableNameMap({});
+    setJoins([]);
+    setCardPositions({});
+    resetConversation();
     setFiles(newFiles);
 
     if (newFiles.length === 0) {
@@ -115,6 +122,8 @@ const EngineerJoinPage: React.FC = () => {
 
     } catch (e: any) {
         setPageError(`File processing failed: ${e.message}`);
+        // On error, fully reset the UI state to match the terminated backend state
+        setFiles([]);
         setSchemas(null);
         setTableNameMap({});
         setPreviewData({});

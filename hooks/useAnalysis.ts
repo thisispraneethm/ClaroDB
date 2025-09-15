@@ -41,7 +41,7 @@ export const useAnalysis = ({ handler, llmProvider, conversation, setConversatio
 
       const sqlResult = await llmProvider.generateSQL(currentQuestion, schemas, handler.getDialect(), history, previewData, joins, corrections);
       setConversation(prev => prev.map(t => 
-        t.id === turnId ? { ...t, state: 'sql_ready', sqlResult } : t
+        t.id === turnId ? { ...t, state: 'sql_ready', sqlResult, correctedQuestion: sqlResult.correctedQuestion } : t
       ));
     } catch (e: any) {
       setConversation(prev => prev.map(t => 
@@ -68,13 +68,15 @@ export const useAnalysis = ({ handler, llmProvider, conversation, setConversatio
         t.id === turnId ? { ...t, state: 'complete', analysisResult } : t
       ));
       
+      const questionForHistory = turn.correctedQuestion || turn.question;
+
       // If the user corrected the SQL, save the correction
       if (isCorrection) {
-        await handler.addCorrection({ question: turn.question, sql: sqlToExecute });
+        await handler.addCorrection({ question: questionForHistory, sql: sqlToExecute });
       }
 
       // Add the executed query (corrected or not) to the history
-      setHistory(prev => [...prev, { role: 'user', content: turn.question }, { role: 'assistant', content: sqlToExecute }]);
+      setHistory(prev => [...prev, { role: 'user', content: questionForHistory }, { role: 'assistant', content: sqlToExecute }]);
 
     } catch (e: any) {
       setConversation(prev => prev.map(t => 

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { TableSchema, Join, Point, ConversationTurn } from '../types';
 import { Loader2, AlertTriangle, Bot, MessageSquare, User } from 'lucide-react';
@@ -7,6 +8,7 @@ import InteractiveSchemaCard from './InteractiveSchemaCard';
 import JoinLines from './JoinLines';
 import CanvasToolbar from './CanvasToolbar';
 import ChatInput from './ChatInput';
+import { useAppContext } from '../contexts/AppContext';
 
 interface DataModelingCanvasProps {
     isLoading: boolean;
@@ -51,13 +53,13 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
     placeholder,
     children,
 }) => {
+    const { resultsPanelWidth, setResultsPanelWidth } = useAppContext();
     const [joinSource, setJoinSource] = useState<{table: string, column: string} | null>(null);
     const [joinTarget, setJoinTarget] = useState<{table: string, column: string} | null>(null);
     const [drawingLine, setDrawingLine] = useState<{start: Point, end: Point} | null>(null);
     const [hoveredJoin, setHoveredJoin] = useState<string | null>(null);
     const [draggedTable, setDraggedTable] = useState<string | null>(null);
     
-    const [resultsWidth, setResultsWidth] = useState(600);
     const isResizing = useRef(false);
 
     const canvasRef = useRef<HTMLDivElement>(null);
@@ -217,9 +219,9 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
         if (!isResizing.current) return;
         const newWidth = window.innerWidth - e.clientX;
         if (newWidth > 400 && newWidth < 1200) {
-            setResultsWidth(newWidth);
+            setResultsPanelWidth(newWidth);
         }
-    }, []);
+    }, [setResultsPanelWidth]);
 
     const handleResizeMouseUp = useCallback(() => {
         isResizing.current = false;
@@ -290,7 +292,7 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
                 </main>
                 
                 {conversation.length > 0 && (
-                    <aside className="flex-shrink-0 flex animate-scale-in" style={{ width: `${resultsWidth}px` }}>
+                    <aside className="flex-shrink-0 flex animate-scale-in" style={{ width: `${resultsPanelWidth}px` }}>
                         <div onMouseDown={handleResizeMouseDown} className="w-1.5 h-full cursor-col-resize bg-border/50 hover:bg-primary transition-colors duration-200"></div>
                         <div className="flex flex-col flex-1 bg-secondary-background/50 border-l border-border overflow-hidden">
                             <div className="p-4 border-b border-border">

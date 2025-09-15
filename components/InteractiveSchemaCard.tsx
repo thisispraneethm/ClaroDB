@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { ColumnSchema, Point } from '../types';
 import { Table2, GripVertical } from 'lucide-react';
@@ -119,7 +120,15 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
               } ${
                 isActiveJoin ? 'bg-primary/20 font-semibold' : ''
               }`}
-              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onColumnMouseDown(tableName, col.name); }}
+              onMouseDown={(e) => {
+                  if (e.currentTarget.clientWidth - e.nativeEvent.offsetX < 15) {
+                    // This is likely a scrollbar click, don't initiate a join.
+                    return;
+                  }
+                  e.preventDefault(); 
+                  e.stopPropagation(); 
+                  onColumnMouseDown(tableName, col.name);
+              }}
               onMouseUp={() => onColumnMouseUp(tableName, col.name)}
               onMouseEnter={() => onColumnEnter({ table: tableName, column: col.name })}
               onMouseLeave={onColumnLeave}

@@ -1,4 +1,5 @@
-import React, { useRef, useLayoutEffect } from 'react';
+
+import React, { useRef, useLayoutEffect, useCallback, useEffect } from 'react';
 import { Send, Loader2, ArrowUp } from 'lucide-react';
 
 interface ChatInputProps {
@@ -12,16 +13,23 @@ interface ChatInputProps {
 
 const ChatInput: React.FC<ChatInputProps> = ({ value, onChange, onSend, isLoading, placeholder, disabled = false }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  
-  useLayoutEffect(() => {
+
+  const updateHeight = useCallback(() => {
     const textarea = textareaRef.current;
     if (textarea) {
-      // Temporarily shrink to allow for accurate scrollHeight calculation
       textarea.style.height = 'auto';
-      // Set the height to the scroll height to fit the content
       textarea.style.height = `${textarea.scrollHeight}px`;
     }
-  }, [value]);
+  }, []);
+
+  useLayoutEffect(updateHeight, [value, updateHeight]);
+
+  useEffect(() => {
+    window.addEventListener('resize', updateHeight);
+    return () => {
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, [updateHeight]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {

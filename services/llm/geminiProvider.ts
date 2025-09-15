@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { LLMProvider } from './base';
 import { SQLGenerationResult, ChartGenerationResult, TableSchema, InsightGenerationResult, ChartGenerationWithMetadataResult, Join } from '../../types';
@@ -28,10 +29,16 @@ export class GeminiProvider extends LLMProvider {
     const allColumns = Object.values(schemas).flat().map(col => col.name);
     const typoCorrections = enhancePromptWithSchemaAwareness(prompt, allColumns);
     
+    let correctedQuestion = prompt;
     let correctionHint = "";
+
     if (Object.keys(typoCorrections).length > 0) {
         const hints = Object.entries(typoCorrections).map(([t, c]) => `'${t}'->'${c}'`).join(", ");
         correctionHint = `\nHINT: The user may have made typos. Apply these corrections: ${hints}.`;
+        
+        Object.entries(typoCorrections).forEach(([typo, correct]) => {
+            correctedQuestion = correctedQuestion.replace(new RegExp(`\\b${typo}\\b`, 'gi'), correct);
+        });
     }
 
     const schemasStr = Object.entries(schemas)
@@ -173,6 +180,7 @@ ${correctionHint}`;
 
       return {
         sql: sqlQuery,
+        correctedQuestion: correctedQuestion,
         model: modelName,
         cost: cost,
         prompt_tokens: promptTokens,

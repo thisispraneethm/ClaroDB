@@ -12,6 +12,7 @@ export interface TableSchema {
 
 export interface SQLGenerationResult {
   sql: string;
+  correctedQuestion: string;
   model: string;
   cost: number;
   prompt_tokens: number;
@@ -60,6 +61,7 @@ export type TurnState = 'sql_generating' | 'sql_ready' | 'executing' | 'complete
 export interface ConversationTurn {
     id: string;
     question: string;
+    correctedQuestion?: string;
     state: TurnState;
     sqlResult?: SQLGenerationResult;
     analysisResult?: AnalysisResult;

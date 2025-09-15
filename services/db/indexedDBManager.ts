@@ -1,3 +1,4 @@
+
 export class IndexedDBManager {
     private db: IDBDatabase | null = null;
     private dbName: string;
@@ -6,69 +7,86 @@ export class IndexedDBManager {
         this.dbName = dbName;
     }
     
+    private getAllRequiredStores(storeNames: string[]): Set<string> {
+        const allRequiredStores = new Set<string>();
+        const createsOriginals = this.dbName.includes('_file_');
+        storeNames.forEach(name => {
+            allRequiredStores.add(name);
+            if (createsOriginals && !name.endsWith('_original')) {
+                allRequiredStores.add(`${name}_original`);
+            }
+        });
+        return allRequiredStores;
+    }
+
     public open(storeNames: string[]): Promise<void> {
         return new Promise((resolve, reject) => {
-            const newVersion = (this.db?.version || 0) + 1;
-            const createsOriginals = this.dbName.includes('_file_');
-
             if (this.db) {
                 const existingStores = Array.from(this.db.objectStoreNames);
-                const allRequiredStores = new Set<string>();
-                storeNames.forEach(name => {
-                    allRequiredStores.add(name);
-                    // Also account for original data stores in file handlers
-                    if (createsOriginals && !name.endsWith('_original')) {
-                        allRequiredStores.add(`${name}_original`);
-                    }
-                });
-                
+                const allRequiredStores = this.getAllRequiredStores(storeNames);
                 const sameStores = existingStores.length === allRequiredStores.size && existingStores.every(s => allRequiredStores.has(s));
-                
                 if (sameStores) {
                     return resolve();
                 }
-                this.db.close(); // Close before upgrading
+                this.db.close();
+                this.db = null;
             }
-
-            const request = indexedDB.open(this.dbName, newVersion);
+            
+            // Open without a version first to inspect the current state
+            const request = indexedDB.open(this.dbName);
 
             request.onerror = () => reject(new Error("Failed to open IndexedDB."));
             
-            request.onupgradeneeded = (event) => {
-                const db = (event.target as IDBOpenDBRequest).result;
-                const transaction = (event.target as IDBOpenDBRequest).transaction;
-                if (!transaction) return;
-
-                const allRequiredStores = new Set<string>();
-                storeNames.forEach(name => {
-                    allRequiredStores.add(name);
-                     if (createsOriginals && !name.endsWith('_original')) {
-                        allRequiredStores.add(`${name}_original`);
-                    }
-                });
-                
-                // Delete stores that are no longer needed
-                Array.from(db.objectStoreNames).forEach(storeName => {
-                    if (!allRequiredStores.has(storeName)) {
-                        db.deleteObjectStore(storeName);
-                    }
-                });
-
-                // Create new stores
-                allRequiredStores.forEach(storeName => {
-                    if (!db.objectStoreNames.contains(storeName)) {
-                        db.createObjectStore(storeName, { autoIncrement: true });
-                    }
-                });
-            };
-
             request.onsuccess = (event) => {
-                this.db = (event.target as IDBOpenDBRequest).result;
-                resolve();
+                const db = (event.target as IDBOpenDBRequest).result;
+                const existingStores = Array.from(db.objectStoreNames);
+                const allRequiredStores = this.getAllRequiredStores(storeNames);
+                const schemaIsCorrect = existingStores.length === allRequiredStores.size && existingStores.every(s => allRequiredStores.has(s));
+
+                if (schemaIsCorrect) {
+                    this.db = db;
+                    return resolve();
+                }
+
+                // Schema mismatch, need to upgrade.
+                const newVersion = db.version + 1;
+                db.close();
+
+                const upgradeRequest = indexedDB.open(this.dbName, newVersion);
+
+                upgradeRequest.onerror = () => reject(new Error("Failed to upgrade IndexedDB."));
+
+                upgradeRequest.onupgradeneeded = (upgradeEvent) => {
+                    const upgradeDb = (upgradeEvent.target as IDBOpenDBRequest).result;
+                    
+                    // Delete stores that are no longer needed
+                    Array.from(upgradeDb.objectStoreNames).forEach(storeName => {
+                        if (!allRequiredStores.has(storeName)) {
+                            upgradeDb.deleteObjectStore(storeName);
+                        }
+                    });
+
+                    // Create new stores
+                    allRequiredStores.forEach(storeName => {
+                        if (!upgradeDb.objectStoreNames.contains(storeName)) {
+                            upgradeDb.createObjectStore(storeName, { autoIncrement: true });
+                        }
+                    });
+                };
+                
+                upgradeRequest.onsuccess = (upgradeSuccessEvent) => {
+                    this.db = (upgradeSuccessEvent.target as IDBOpenDBRequest).result;
+                    resolve();
+                };
+
+                upgradeRequest.onblocked = () => {
+                    console.warn(`IndexedDB upgrade request for "${this.dbName}" is blocked.`);
+                    reject(new Error("Database upgrade is blocked. Please close other tabs with this application."));
+                };
             };
             
             request.onblocked = () => {
-                console.warn(`IndexedDB open request for "${this.dbName}" is blocked. This can happen if another tab has the database open with an older version.`);
+                console.warn(`IndexedDB open request for "${this.dbName}" is blocked.`);
                 reject(new Error("Database connection is blocked. Please close other tabs with this application and refresh."));
             }
         });

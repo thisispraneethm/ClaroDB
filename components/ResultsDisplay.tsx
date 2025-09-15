@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -6,7 +7,7 @@ import {
 import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 import ReactMarkdown from 'react-markdown';
 import { ConversationTurn, ChartGenerationResult } from '../types';
-import { Table, BarChart2, Lightbulb, ChevronLeft, ChevronRight, Loader2, FileDown, FileText, Printer, FileImage } from 'lucide-react';
+import { Table, BarChart2, Lightbulb, ChevronLeft, ChevronRight, Loader2, FileDown, FileText, Printer, FileImage, Check, X } from 'lucide-react';
 
 interface ResultsDisplayProps {
   turn: ConversationTurn;
@@ -83,8 +84,13 @@ const ChartControls: React.FC<{
         setConfig(prev => {
             if (!prev) return null;
             let newDataKeys = prev.dataKeys;
-            if (newType === 'pie' && prev.dataKeys.length > 1) {
+            // When switching to a single-series chart, keep only the first key.
+            if (['pie', 'bar', 'line', 'area', 'scatter'].includes(newType) && prev.dataKeys.length > 1) {
                 newDataKeys = [prev.dataKeys[0]];
+            }
+            // When switching to a multi-series chart, ensure at least one key exists.
+            if (['composed', 'stackedBar'].includes(newType) && prev.dataKeys.length === 0 && numericColumns.length > 0) {
+                 newDataKeys = [numericColumns[0]];
             }
             return { ...prev, chartType: newType, dataKeys: newDataKeys };
         });
@@ -95,15 +101,16 @@ const ChartControls: React.FC<{
     };
 
     const handleYAxisChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const newYKey = e.target.value;
+        setConfig(prev => prev ? { ...prev, dataKeys: [e.target.value] } : null);
+    };
+
+    const handleMultiYAxisChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { value: column, checked } = e.target;
         setConfig(prev => {
             if (!prev) return null;
-            const newConfig: ChartGenerationResult = { ...prev, dataKeys: [newYKey] };
-            // If chart was multi-series, simplify it to a basic bar chart
-            if (prev.chartType === 'stackedBar' || prev.chartType === 'composed') {
-                newConfig.chartType = 'bar';
-            }
-            return newConfig;
+            const currentKeys = prev.dataKeys || [];
+            const newKeys = checked ? [...currentKeys, column] : currentKeys.filter(key => key !== column);
+            return { ...prev, dataKeys: newKeys };
         });
     };
 
@@ -118,37 +125,58 @@ const ChartControls: React.FC<{
     }, [config.chartType, numericColumns, categoricalColumns, allColumns]);
     
     const controlClass = "w-full p-2 text-sm border border-input rounded-md focus:ring-1 focus:ring-ring focus:outline-none transition bg-card";
+    const isMultiSeries = config.chartType === 'stackedBar' || config.chartType === 'composed';
 
     return (
-        <div className="p-3 bg-secondary-background/70 border-b border-black/5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-center">
-            <div>
-                 <label className="block text-xs font-medium text-text-secondary mb-1">Chart Title</label>
+        <div className="p-3 bg-secondary-background/70 border-b border-black/5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+            <div className="space-y-1">
+                 <label className="block text-xs font-medium text-text-secondary">Chart Title</label>
                  <input type="text" value={config.title} onChange={handleTitleChange} className={controlClass} />
             </div>
-            <div>
-                 <label className="block text-xs font-medium text-text-secondary mb-1">Chart Type</label>
-                 <select value={config.chartType} onChange={handleChartTypeChange} className={controlClass}>
-                    <option value="bar">Bar</option>
-                    <option value="line">Line</option>
-                    <option value="area">Area</option>
-                    <option value="pie">Pie</option>
-                    <option value="scatter">Scatter</option>
-                    <option value="composed">Composed</option>
-                    <option value="stackedBar">Stacked Bar</option>
-                 </select>
+            <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                     <label className="block text-xs font-medium text-text-secondary">Chart Type</label>
+                     <select value={config.chartType} onChange={handleChartTypeChange} className={controlClass}>
+                        <option value="bar">Bar</option>
+                        <option value="line">Line</option>
+                        <option value="area">Area</option>
+                        <option value="pie">Pie</option>
+                        <option value="scatter">Scatter</option>
+                        <option value="composed">Composed</option>
+                        <option value="stackedBar">Stacked Bar</option>
+                     </select>
+                </div>
+                <div className="space-y-1">
+                     <label className="block text-xs font-medium text-text-secondary">{config.chartType === 'pie' ? 'Label' : 'X-Axis'}</label>
+                     <select value={config.nameKey} onChange={handleXAxisChange} className={controlClass}>
+                         {xAxisOptions.map(col => <option key={col} value={col}>{col}</option>)}
+                     </select>
+                </div>
             </div>
-            <div>
-                 <label className="block text-xs font-medium text-text-secondary mb-1">{config.chartType === 'pie' ? 'Label' : 'X-Axis'}</label>
-                 <select value={config.nameKey} onChange={handleXAxisChange} className={controlClass}>
-                     {xAxisOptions.map(col => <option key={col} value={col}>{col}</option>)}
-                 </select>
-            </div>
-            <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">{config.chartType === 'pie' ? 'Value' : 'Y-Axis'}</label>
-                <select value={config.dataKeys?.[0] || ''} onChange={handleYAxisChange} className={controlClass} disabled={numericColumns.length === 0}>
-                    {numericColumns.length === 0 && <option>No numeric columns</option>}
-                    {numericColumns.map(col => <option key={col} value={col}>{col}</option>)}
-                </select>
+
+            <div className="space-y-1">
+                <label className="block text-xs font-medium text-text-secondary">{isMultiSeries ? 'Y-Axis Series' : (config.chartType === 'pie' ? 'Value' : 'Y-Axis')}</label>
+                {isMultiSeries ? (
+                    <div className="p-2 border border-input rounded-md bg-card max-h-32 overflow-y-auto space-y-1">
+                        {numericColumns.map(col => (
+                            <label key={col} className="flex items-center text-sm font-medium text-text-secondary p-1 rounded-md hover:bg-black/5 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    value={col}
+                                    checked={config.dataKeys.includes(col)}
+                                    onChange={handleMultiYAxisChange}
+                                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary mr-2"
+                                />
+                                {col}
+                            </label>
+                        ))}
+                    </div>
+                ) : (
+                    <select value={config.dataKeys?.[0] || ''} onChange={handleYAxisChange} className={controlClass} disabled={numericColumns.length === 0}>
+                        {numericColumns.length === 0 && <option>No numeric columns</option>}
+                        {numericColumns.map(col => <option key={col} value={col}>{col}</option>)}
+                    </select>
+                )}
             </div>
         </div>
     );

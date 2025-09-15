@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, ReactNode, useState, useEffect } from 'react';
 import { GeminiProvider } from '../services/llm/geminiProvider';
 import { LLMProvider } from '../services/llm/base';
@@ -65,6 +66,10 @@ interface AppContextType {
   setEnterpriseJoins: React.Dispatch<React.SetStateAction<Join[]>>;
   enterpriseCardPositions: Record<string, Point>;
   setEnterpriseCardPositions: React.Dispatch<React.SetStateAction<Record<string, Point>>>;
+
+  // Shared UI State
+  resultsPanelWidth: number;
+  setResultsPanelWidth: React.Dispatch<React.SetStateAction<number>>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -107,6 +112,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [enterprisePreviewData, setEnterprisePreviewData] = useState<Record<string, Record<string, any>[]>>({});
   const [enterpriseJoins, setEnterpriseJoins] = useState<Join[]>([]);
   const [enterpriseCardPositions, setEnterpriseCardPositions] = useState<Record<string, Point>>({});
+  
+  // Shared UI State
+  const [resultsPanelWidth, setResultsPanelWidth] = useState<number>(600);
 
   // Centralized initialization for all data handlers. This runs once per application
   // lifecycle, ensuring all database connections are established reliably and
@@ -154,6 +162,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     enterpriseIsConnected, setEnterpriseIsConnected, enterpriseSchemas, setEnterpriseSchemas,
     enterprisePreviewData, setEnterprisePreviewData, enterpriseJoins, setEnterpriseJoins,
     enterpriseCardPositions, setEnterpriseCardPositions,
+    
+    // Shared UI
+    resultsPanelWidth, setResultsPanelWidth,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
