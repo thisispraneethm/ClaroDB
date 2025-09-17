@@ -163,7 +163,7 @@ const AnalyzePage: React.FC = () => {
                         <p className="text-sm font-medium">You are now working with a sampled subset of your original data.</p>
                     </div>
                 )}
-                <Container title="2. Review Data"><DataPreview data={previewData} /></Container>
+                <Container title="3. Review Data"><DataPreview data={previewData} /></Container>
               </>
             )}
           
@@ -172,11 +172,17 @@ const AnalyzePage: React.FC = () => {
               {analyzeConversation.map((turn) => (
                 <React.Fragment key={turn.id}>
                   <div className="flex items-start justify-end group">
-                    <div className="bg-primary text-primary-foreground rounded-xl rounded-br-none p-4 max-w-2xl shadow-md"><p>{turn.question}</p></div>
-                    <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center ml-3 flex-shrink-0"><User size={20} /></div>
+                     <div className="bg-primary text-primary-foreground rounded-2xl rounded-br-lg p-4 max-w-2xl shadow-lg shadow-primary/20">
+                        <p>{turn.question}</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-full bg-card/80 backdrop-blur-xl border border-white/20 flex items-center justify-center ml-3 flex-shrink-0 shadow-card">
+                        <User size={20} className="text-text-secondary" />
+                    </div>
                   </div>
                   <div className="flex items-start group">
-                    <div className="w-10 h-10 rounded-full bg-secondary-background text-primary border border-border flex items-center justify-center mr-3 flex-shrink-0"><Bot size={20} /></div>
+                     <div className="w-10 h-10 rounded-full bg-card/80 backdrop-blur-xl text-primary border border-white/20 flex items-center justify-center mr-3 flex-shrink-0 shadow-card">
+                        <Bot size={20} />
+                    </div>
                     <div className="flex-1 min-w-0">
                         <ConversationTurnDisplay
                             turn={turn}
