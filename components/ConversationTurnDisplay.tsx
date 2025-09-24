@@ -4,14 +4,20 @@ import { Loader2, AlertTriangle } from 'lucide-react';
 import SQLApproval from './SQLApproval';
 import ResultsDisplay from './ResultsDisplay';
 
-interface ConversationTurnDisplayProps {
+const ThinkingIndicator = () => (
+  <div className="flex items-center space-x-2 p-4">
+    <div className="w-2.5 h-2.5 bg-primary/40 rounded-full animate-pulse" style={{ animationDelay: '0s', animationDuration: '1s' }}></div>
+    <div className="w-2.5 h-2.5 bg-primary/40 rounded-full animate-pulse" style={{ animationDelay: '0.2s', animationDuration: '1s' }}></div>
+    <div className="w-2.5 h-2.5 bg-primary/40 rounded-full animate-pulse" style={{ animationDelay: '0.4s', animationDuration: '1s' }}></div>
+  </div>
+);
+
+const ConversationTurnDisplay: React.FC<{
   turn: ConversationTurn;
   onExecute: (turnId: string, sql: string) => void;
   onGenerateInsights: (turnId: string) => void;
   onGenerateChart: (turnId: string) => void;
-}
-
-const ConversationTurnDisplay: React.FC<ConversationTurnDisplayProps> = ({
+}> = ({
   turn,
   onExecute,
   onGenerateInsights,
@@ -21,10 +27,10 @@ const ConversationTurnDisplay: React.FC<ConversationTurnDisplayProps> = ({
     case 'sql_generating':
     case 'executing':
       return (
-        <div className="flex items-center p-4 bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card">
-          <Loader2 className="animate-spin text-primary" size={20} />
-          <span className="ml-3 text-text-secondary text-sm font-medium">
-            {turn.state === 'sql_generating' ? 'Generating SQL...' : 'Executing query...'}
+        <div className="bg-card/90 backdrop-blur-xl border border-border rounded-xl shadow-medium inline-flex items-center">
+          <ThinkingIndicator />
+          <span className="ml-0 mr-4 text-text-secondary text-sm font-medium">
+            {turn.state === 'sql_generating' ? 'Thinking...' : 'Executing...'}
           </span>
         </div>
       );

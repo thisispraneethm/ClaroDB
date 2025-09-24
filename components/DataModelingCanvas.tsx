@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { TableSchema, Join, Point, ConversationTurn } from '../types';
 import { Loader2, AlertTriangle, Bot, MessageSquare, User } from 'lucide-react';
@@ -160,12 +161,16 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
                 while (head < queue.length) {
                     const u = queue[head++];
                     component.push(u);
-                    adjList.get(u)?.forEach(v => {
-                        if (!visited.has(v)) {
-                            visited.add(v);
-                            queue.push(v);
-                        }
-                    });
+                    // FIX: Replaced optional chaining with a more robust 'if' check to handle 'unknown' type inference issues.
+                    const neighbors = adjList.get(u);
+                    if (neighbors) {
+                        neighbors.forEach(v => {
+                            if (!visited.has(v)) {
+                                visited.add(v);
+                                queue.push(v);
+                            }
+                        });
+                    }
                 }
                 components.push(component);
             }

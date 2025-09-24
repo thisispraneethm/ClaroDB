@@ -39,7 +39,7 @@ const WelcomeMessage: React.FC<WelcomeMessageProps> = ({ title, description, sch
                 <button
                   key={ex.text}
                   onClick={() => ex.onSelect(ex.text)}
-                  className="text-left p-4 bg-card/80 border border-white/20 rounded-lg transition-all duration-200 text-sm text-text active:scale-[0.98] shadow-card hover:shadow-card-hover hover:border-white/30 hover:-translate-y-0.5"
+                  className="text-left p-4 bg-card/80 border border-border rounded-lg transition-all duration-200 text-sm text-text active:scale-[0.98] shadow-interactive hover:shadow-interactive-hover hover:border-border"
                 >
                   "{ex.text}"
                 </button>

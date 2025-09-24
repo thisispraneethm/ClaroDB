@@ -1,19 +1,20 @@
 import React from 'react';
 import { ShieldCheck, Cpu, Layers3, Zap, Database } from 'lucide-react';
 
-const AboutPage: React.FC = () => {
-  const TechCard = ({ icon, title, children }: { icon: React.ReactNode, title: string, children: React.ReactNode }) => (
-    <div className="bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl p-6 shadow-card hover:shadow-card-hover transition-shadow">
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-          {icon}
-        </div>
-        <h3 className="text-lg font-semibold text-text">{title}</h3>
+// FIX: Changed component to take a `description` prop instead of `children` to resolve a typing issue.
+const TechCard = ({ icon, title, description }: { icon: React.ReactNode, title: string, description: React.ReactNode }) => (
+  <div className="bg-card/80 backdrop-blur-xl border border-border rounded-xl p-6 shadow-medium hover:shadow-large transition-all duration-300 hover:-translate-y-1">
+    <div className="flex items-center gap-4 mb-3">
+      <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+        {icon}
       </div>
-      <p className="text-sm text-text-secondary">{children}</p>
+      <h3 className="text-lg font-semibold text-text">{title}</h3>
     </div>
-  );
+    <p className="text-sm text-text-secondary">{description}</p>
+  </div>
+);
 
+const AboutPage: React.FC = () => {
   return (
     <div className="h-full overflow-y-auto p-6 md:p-8 lg:p-12 animate-fade-in-up">
       <div className="max-w-4xl mx-auto">
@@ -26,23 +27,23 @@ const AboutPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="space-y-12">
+        <div className="space-y-16">
           {/* Security & Privacy Section */}
-          <div className="p-8 bg-card/80 backdrop-blur-xl border border-white/20 rounded-2xl shadow-card">
+          <div className="p-8 bg-card/80 backdrop-blur-xl border border-border rounded-xl shadow-medium">
             <div className="flex flex-col md:flex-row items-center gap-8">
               <div className="flex-shrink-0 text-center">
-                <div className="p-5 rounded-full bg-primary/10 inline-block">
+                <div className="p-5 rounded-full bg-primary/10 inline-block ring-8 ring-white/50">
                   <ShieldCheck size={48} className="text-primary" />
                 </div>
                 <h2 className="text-2xl font-bold mt-4 text-text">Your Data, Your Browser.</h2>
               </div>
               <div>
                 <p className="text-md text-text-secondary leading-relaxed">
-                  At ClaroDB, we value your privacy above all else. Our architecture is built on a simple but powerful promise: <strong className="font-bold text-text uppercase">your data never leaves your computer</strong>. All file processing, storage, and SQL execution happens locally within your browser. We do not have servers that see, store, or interact with your raw data.
+                  At ClaroDB, we value your privacy above all else. Our architecture is built on a simple but powerful promise: <strong className="font-bold text-text uppercase">your data never leaves your computer</strong>. All file processing, storage, and SQL execution happens locally within your browser.
                 </p>
-                <ul className="mt-4 space-y-2 text-sm text-text-secondary">
-                  <li className="flex items-start"><Cpu size={16} className="mr-3 mt-1 text-primary flex-shrink-0" /><span><strong>Client-Side Processing:</strong> Files are parsed and queried directly on your machine. The only data sent to the cloud is the anonymous table schema (column names and types) and your natural language question to the AI model. Your raw data rows are never sent.</span></li>
-                  <li className="flex items-start"><Database size={16} className="mr-3 mt-1 text-primary flex-shrink-0" /><span><strong>In-Memory & IndexedDB:</strong> Data is loaded into your browser's memory for analysis and stored in IndexedDB for persistence across sessions, not on a remote server. This ensures your data remains private and secure.</span></li>
+                <ul className="mt-4 space-y-3 text-sm text-text-secondary">
+                  <li className="flex items-start"><Cpu size={16} className="mr-3 mt-1 text-primary flex-shrink-0" /><span><strong>Client-Side Processing:</strong> The only data sent to the cloud is the anonymous table schema (column names and types) and your natural language question to the AI model. Your raw data rows are never sent.</span></li>
+                  <li className="flex items-start"><Database size={16} className="mr-3 mt-1 text-primary flex-shrink-0" /><span><strong>In-Browser Storage:</strong> Data is loaded into IndexedDB for persistence across sessions, not on a remote server. This ensures your data remains private and secure.</span></li>
                 </ul>
               </div>
             </div>
@@ -52,18 +53,11 @@ const AboutPage: React.FC = () => {
           <div>
             <h2 className="text-3xl font-bold text-center mb-8 text-text">The Technology Powering ClaroDB</h2>
             <div className="grid md:grid-cols-2 gap-6">
-              <TechCard icon={<Zap size={20} />} title="Google Gemini API">
-                The state-of-the-art AI model that translates your plain English questions into precise, executable SQL queries.
-              </TechCard>
-              <TechCard icon={<Layers3 size={20} />} title="React & TypeScript">
-                Builds a modern, reliable, and performant user interface, ensuring a smooth and responsive experience.
-              </TechCard>
-              <TechCard icon={<Cpu size={20} />} title="IndexedDB & AlaSQL">
-                A powerful combination for client-side data handling. IndexedDB provides robust, persistent storage in your browser, while AlaSQL acts as the in-browser SQL engine to execute queries instantly.
-              </TechCard>
-              <TechCard icon={<Layers3 size={20} />} title="Tailwind CSS & Recharts">
-                Creates a beautiful, clean, and responsive design, with powerful charting capabilities for intuitive data visualization.
-              </TechCard>
+              {/* FIX: Updated TechCard calls to use the `description` prop. */}
+              <TechCard icon={<Zap size={20} />} title="Google Gemini API" description="The state-of-the-art AI model that translates your plain English questions into precise, executable SQL queries." />
+              <TechCard icon={<Layers3 size={20} />} title="React & TypeScript" description="Builds a modern, reliable, and performant user interface, ensuring a smooth and responsive experience." />
+              <TechCard icon={<Cpu size={20} />} title="IndexedDB & AlaSQL" description="A powerful combination for client-side data handling. IndexedDB provides robust, persistent storage in your browser, while AlaSQL acts as the in-browser SQL engine to execute queries instantly." />
+              <TechCard icon={<Layers3 size={20} />} title="Tailwind CSS & Recharts" description="Creates a beautiful, clean, and responsive design, with powerful charting capabilities for intuitive data visualization." />
             </div>
           </div>
 

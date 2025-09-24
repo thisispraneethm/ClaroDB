@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { TableSchema } from '../types';
 import { Table2 } from 'lucide-react';
@@ -15,7 +16,10 @@ const SchemaDisplay: React.FC<SchemaDisplayProps> = ({ schemas, tableNameMap = {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-      {Object.entries(schemas).map(([tableName, columns]) => (
+      {/* FIX: Replaced Object.entries with Object.keys to ensure proper type inference for 'columns'. */}
+      {Object.keys(schemas).map((tableName) => {
+        const columns = schemas[tableName];
+        return (
         <div key={tableName} className="bg-card border border-border rounded-lg p-4 shadow-card hover:shadow-card-hover transition-shadow">
           <div className="flex items-center gap-2 pb-2.5 mb-2.5 border-b border-border/50">
             <Table2 size={16} className="text-text-secondary" />
@@ -33,7 +37,7 @@ const SchemaDisplay: React.FC<SchemaDisplayProps> = ({ schemas, tableNameMap = {
              {columns.length === 0 && <span className="text-xs text-text-secondary">No columns found.</span>}
           </div>
         </div>
-      ))}
+      )})}
     </div>
   );
 };

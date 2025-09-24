@@ -1,4 +1,6 @@
 
+// FIX: Added import for React to resolve namespace errors for React types.
+import React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { TableSchema, ConversationTurn, InsightGenerationResult, ChartGenerationWithMetadataResult, Join } from '../types';
 import { DataHandler } from '../services/handlers/base';

@@ -38,9 +38,9 @@ const SQLApproval: React.FC<SQLApprovalProps> = ({ sqlResult, onExecute }) => {
   const totalTokens = (sqlResult.prompt_tokens || 0) + (sqlResult.completion_tokens || 0);
 
   return (
-    <div className="bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card overflow-hidden">
-      <div className="p-4 md:p-6 space-y-4">
-        <div className="bg-secondary-background/70 rounded-md border border-border overflow-hidden">
+    <div className="bg-card/90 backdrop-blur-xl border border-border rounded-xl shadow-medium overflow-hidden">
+      <div className="p-4 md:p-5 space-y-4">
+        <div className="bg-secondary-background rounded-md border border-border overflow-hidden">
           <div className="px-4 py-2 flex justify-between items-center border-b border-border flex-wrap gap-2">
             <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold text-text">Generated SQL</h3>

@@ -79,11 +79,16 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
       }
 
       // Create new positions array for rendering
-      const newPositions = Object.entries(currentAnimated).map(([id, points]) => ({
-        id,
-        ...points,
-        join: joins.find(j => j.id === id)!,
-      })).filter(p => p.join);
+      // FIX: Replaced Object.entries with Object.keys to ensure correct type inference for 'points'.
+      const newPositions = Object.keys(currentAnimated).map(id => {
+        const points = currentAnimated[id];
+        return {
+            id,
+            p1: points.p1,
+            p2: points.p2,
+            join: joins.find(j => j.id === id)!,
+        };
+      }).filter(p => p.join);
 
       setLinePositions(newPositions);
 
