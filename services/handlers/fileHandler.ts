@@ -111,7 +111,8 @@ export class FileDataHandler extends DataHandler {
                 await this.dbManager.addData(source.name, data);
             }
         } catch (e: any) {
-            await this.terminate();
+            // Do not terminate. Let the caller decide how to handle the error.
+            // The UI will reset, and the next successful load will overwrite any partial state.
             if (e instanceof DataProcessingError) throw e;
             const errorMessage = e.message || 'An unknown error occurred during file processing.';
             throw new DataProcessingError(`Failed to process file(s): ${errorMessage}`);

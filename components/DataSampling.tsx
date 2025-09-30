@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { TableSchema } from '../types';
 import { SlidersHorizontal } from 'lucide-react';
@@ -24,12 +25,11 @@ const DataSampling: React.FC<DataSamplingProps> = ({ schemas, onApplySampling, d
       setStratifyColumn(columns[0].name);
     }
   }, [columns, stratifyColumn]);
+  
+  const isApplyDisabled = disabled || (method === 'stratified' && !stratifyColumn);
 
   const handleApply = () => {
-    if (method === 'stratified' && !stratifyColumn) {
-        alert("Please select a column for stratified sampling.");
-        return;
-    }
+    if (isApplyDisabled) return;
     onApplySampling(method, size, stratifyColumn);
   };
   
@@ -68,7 +68,7 @@ const DataSampling: React.FC<DataSamplingProps> = ({ schemas, onApplySampling, d
         <div className="mt-4 flex justify-end">
             <button
                 onClick={handleApply}
-                disabled={disabled}
+                disabled={isApplyDisabled}
                 className="px-5 py-2.5 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary/90 disabled:opacity-50 flex items-center transition-colors"
             >
                 <SlidersHorizontal size={16} className="mr-2" />

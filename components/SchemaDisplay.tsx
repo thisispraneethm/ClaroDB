@@ -1,5 +1,6 @@
 
 
+
 import React from 'react';
 import { TableSchema } from '../types';
 import { Table2 } from 'lucide-react';
@@ -16,7 +17,6 @@ const SchemaDisplay: React.FC<SchemaDisplayProps> = ({ schemas, tableNameMap = {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-      {/* FIX: Replaced Object.entries with Object.keys to ensure proper type inference for 'columns'. */}
       {Object.keys(schemas).map((tableName) => {
         const columns = schemas[tableName];
         return (

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -19,8 +20,8 @@ type Tab = 'table' | 'insights' | 'chart';
 const ROWS_PER_PAGE = 50;
 const PALETTE = ['#007AFF', '#34C759', '#FF9500', '#FF3B30', '#5856D6', '#AF52DE'];
 
-// Fix: The TooltipProps for a custom tooltip's content are not the same as the props for the Tooltip component.
-// Defining a specific interface for the content renderer's props resolves the type error.
+// The TooltipProps for a custom tooltip's content are not the same as the props for the Tooltip component.
+// Defining a specific interface for the content renderer's props resolves potential type errors.
 interface CustomTooltipProps {
   active?: boolean;
   payload?: {
@@ -407,8 +408,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
           const url = URL.createObjectURL(svgBlob);
 
           img.onload = () => {
-              const bgElement = document.querySelector('.animated-bg-canvas');
-              ctx.fillStyle = bgElement ? getComputedStyle(bgElement).backgroundColor : '#F8F9FC';
+              // Hard-code the background color to match the app's theme and remove brittle DOM dependency.
+              ctx.fillStyle = '#F9FAFB'; // From tailwind.config in index.html
               ctx.fillRect(0, 0, width, height);
               ctx.drawImage(img, 0, 0);
               URL.revokeObjectURL(url);

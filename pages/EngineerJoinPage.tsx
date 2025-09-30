@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback } from 'react';
 import Container from '../components/Container';
 import { Join, Point } from '../types';
@@ -138,7 +139,19 @@ const EngineerJoinPage: React.FC = () => {
     
     const handleConfirmJoin = (joinType: Join['joinType']) => {
         if (!modalState.details) return;
-        setJoins(prev => [...prev, { ...modalState.details!, id: uuidv4(), joinType }]);
+
+        const newJoin = { ...modalState.details!, id: uuidv4(), joinType };
+
+        // Check for duplicates (in either direction)
+        const alreadyExists = joins.some(j => 
+            (j.table1 === newJoin.table1 && j.column1 === newJoin.column1 && j.table2 === newJoin.table2 && j.column2 === newJoin.column2) ||
+            (j.table1 === newJoin.table2 && j.column1 === newJoin.column2 && j.table2 === newJoin.table1 && j.column2 === newJoin.column1)
+        );
+
+        if (!alreadyExists) {
+            setJoins(prev => [...prev, newJoin]);
+        }
+        
         setModalState({ isOpen: false, details: null });
     };
 

@@ -62,16 +62,17 @@ const AnalyzePage: React.FC = () => {
   }
 
   const handleFileChange = async (selectedFiles: File[]) => {
+    setPageError(null); // Clear previous errors immediately
     const selectedFile = selectedFiles[0] || null;
     setFile(selectedFile);
     resetConversation();
     setSchemas(null);
-    setPageError(null);
     setPreviewData(null);
     setIsSampled(false);
 
     if (!selectedFile) {
-      await handler.loadFiles([]);
+      // No need to call handler, state is already cleared.
+      // The handler's internal state will be overwritten on the next successful load.
       return;
     }
 

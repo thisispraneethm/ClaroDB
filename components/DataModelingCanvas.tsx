@@ -161,9 +161,9 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
                 while (head < queue.length) {
                     const u = queue[head++];
                     component.push(u);
-                    // FIX: Replaced optional chaining with a more robust 'if' check to handle 'unknown' type inference issues.
                     const neighbors = adjList.get(u);
-                    if (neighbors) {
+                    // FIX: Use `Array.isArray` as a type guard to ensure `neighbors` is an array before calling `forEach`, resolving a TypeScript error where the type was inferred as `unknown`.
+                    if (Array.isArray(neighbors)) {
                         neighbors.forEach(v => {
                             if (!visited.has(v)) {
                                 visited.add(v);
@@ -222,10 +222,15 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
 
     const handleResizeMouseMove = useCallback((e: MouseEvent) => {
         if (!isResizing.current) return;
+        const leftPanelWidth = 384; // w-96
+        const minCanvasWidth = 300; // A reasonable minimum for the canvas
         const newWidth = window.innerWidth - e.clientX;
-        if (newWidth > 400 && newWidth < 1200) {
-            setResultsPanelWidth(newWidth);
-        }
+        
+        // Clamp the new width to prevent squishing other panels
+        const maxWidth = window.innerWidth - leftPanelWidth - minCanvasWidth;
+        const clampedWidth = Math.max(400, Math.min(newWidth, maxWidth));
+        
+        setResultsPanelWidth(clampedWidth);
     }, [setResultsPanelWidth]);
 
     const handleResizeMouseUp = useCallback(() => {

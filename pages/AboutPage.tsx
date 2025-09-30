@@ -1,7 +1,6 @@
 import React from 'react';
 import { ShieldCheck, Cpu, Layers3, Zap, Database } from 'lucide-react';
 
-// FIX: Changed component to take a `description` prop instead of `children` to resolve a typing issue.
 const TechCard = ({ icon, title, description }: { icon: React.ReactNode, title: string, description: React.ReactNode }) => (
   <div className="bg-card/80 backdrop-blur-xl border border-border rounded-xl p-6 shadow-medium hover:shadow-large transition-all duration-300 hover:-translate-y-1">
     <div className="flex items-center gap-4 mb-3">
@@ -53,7 +52,6 @@ const AboutPage: React.FC = () => {
           <div>
             <h2 className="text-3xl font-bold text-center mb-8 text-text">The Technology Powering ClaroDB</h2>
             <div className="grid md:grid-cols-2 gap-6">
-              {/* FIX: Updated TechCard calls to use the `description` prop. */}
               <TechCard icon={<Zap size={20} />} title="Google Gemini API" description="The state-of-the-art AI model that translates your plain English questions into precise, executable SQL queries." />
               <TechCard icon={<Layers3 size={20} />} title="React & TypeScript" description="Builds a modern, reliable, and performant user interface, ensuring a smooth and responsive experience." />
               <TechCard icon={<Cpu size={20} />} title="IndexedDB & AlaSQL" description="A powerful combination for client-side data handling. IndexedDB provides robust, persistent storage in your browser, while AlaSQL acts as the in-browser SQL engine to execute queries instantly." />

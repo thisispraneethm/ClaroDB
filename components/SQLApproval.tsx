@@ -21,10 +21,20 @@ const SQLApproval: React.FC<SQLApprovalProps> = ({ sqlResult, onExecute }) => {
   }, [sqlResult.sql]);
 
   useEffect(() => {
-    if (isEditing && textAreaRef.current) {
-        textAreaRef.current.focus();
-        textAreaRef.current.style.height = 'inherit';
-        textAreaRef.current.style.height = `${textAreaRef.current.scrollHeight}px`;
+    const textarea = textAreaRef.current;
+    if (isEditing && textarea) {
+        const resize = () => {
+            textarea.style.height = 'inherit';
+            textarea.style.height = `${textarea.scrollHeight}px`;
+        };
+
+        textarea.focus();
+        resize(); // Initial resize on open and on edit
+
+        window.addEventListener('resize', resize);
+        return () => {
+            window.removeEventListener('resize', resize);
+        };
     }
   }, [isEditing, editedSql]);
 
@@ -63,7 +73,6 @@ const SQLApproval: React.FC<SQLApprovalProps> = ({ sqlResult, onExecute }) => {
                 value={editedSql}
                 onChange={(e) => setEditedSql(e.target.value)}
                 className="w-full p-4 font-mono text-sm bg-transparent focus:outline-none resize-none overflow-hidden"
-                rows={Math.max(5, editedSql.split('\n').length)}
               />
           ) : (
             <SyntaxHighlighter language="sql" style={github} customStyle={{ background: 'transparent', padding: '1rem', margin: 0, fontSize: '0.8rem' }} wrapLines={true}>
