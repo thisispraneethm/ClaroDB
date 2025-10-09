@@ -408,8 +408,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
           const url = URL.createObjectURL(svgBlob);
 
           img.onload = () => {
-              // Hard-code the background color to match the app's theme and remove brittle DOM dependency.
-              ctx.fillStyle = '#F9FAFB'; // From tailwind.config in index.html
+              // Dynamically get background color to avoid hardcoding and ensure theme consistency.
+              const bgElement = document.querySelector('.animated-bg-canvas');
+              const bgColor = bgElement ? getComputedStyle(bgElement).backgroundColor : '#F9FAFB'; // Fallback color
+              ctx.fillStyle = bgColor;
               ctx.fillRect(0, 0, width, height);
               ctx.drawImage(img, 0, 0);
               URL.revokeObjectURL(url);

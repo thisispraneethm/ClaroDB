@@ -82,7 +82,7 @@ const SQLApproval: React.FC<SQLApprovalProps> = ({ sqlResult, onExecute }) => {
         </div>
         
         {isCorrected && (
-             <div className="flex items-start bg-primary/10 border border-primary/20 text-primary p-3 rounded-md">
+             <div className="flex items-start bg-info-background border border-info-border text-info-text p-3 rounded-md">
                 <BrainCircuit size={20} className="mr-3 mt-0.5 flex-shrink-0" />
                 <div className="text-sm">
                     <p><strong>Your correction will be saved.</strong> The system will use this feedback to improve future SQL generations.</p>

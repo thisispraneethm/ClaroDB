@@ -28,6 +28,15 @@ const mockData = {
 };
 const CORRECTIONS_STORE_NAME = 'corrections_enterprise';
 
+// Type guard to validate the structure of Correction objects at runtime.
+function isCorrection(obj: any): obj is Correction {
+  return obj && typeof obj.question === 'string' && typeof obj.sql === 'string';
+}
+
+function isCorrectionArray(obj: any): obj is Correction[] {
+    return Array.isArray(obj) && obj.every(isCorrection);
+}
+
 export class EnterpriseDataHandler extends DataHandler {
     private dbManager: IndexedDBManager | null = null;
     private dbName = 'clarodb_enterprise';
@@ -111,7 +120,11 @@ export class EnterpriseDataHandler extends DataHandler {
 
     async getCorrections(limit: number): Promise<Correction[]> {
         if (!this.dbManager) throw new Error("DB Manager not ready for corrections.");
-        const allCorrections = await this.dbManager.getData(CORRECTIONS_STORE_NAME) as Correction[];
+        const allCorrections = await this.dbManager.getData(CORRECTIONS_STORE_NAME);
+        if (!isCorrectionArray(allCorrections)) {
+            console.warn("Invalid data found in corrections store. Returning empty array.");
+            return [];
+        }
         return allCorrections.slice(-limit);
     }
 }

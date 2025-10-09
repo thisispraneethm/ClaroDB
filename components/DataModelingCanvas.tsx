@@ -162,7 +162,7 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
                     const u = queue[head++];
                     component.push(u);
                     const neighbors = adjList.get(u);
-                    // FIX: Use `Array.isArray` as a type guard to ensure `neighbors` is an array before calling `forEach`, resolving a TypeScript error where the type was inferred as `unknown`.
+                    // FIX: `adjList.get(u)` can return undefined. Added a type guard to ensure `neighbors` is an array before calling `forEach`.
                     if (Array.isArray(neighbors)) {
                         neighbors.forEach(v => {
                             if (!visited.has(v)) {
