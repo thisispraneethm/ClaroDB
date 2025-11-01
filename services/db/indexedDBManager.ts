@@ -2,17 +2,18 @@
 export class IndexedDBManager {
     private db: IDBDatabase | null = null;
     private dbName: string;
+    private options: { createsOriginals: boolean };
 
-    constructor(dbName: string) {
+    constructor(dbName: string, options?: { createsOriginals: boolean }) {
         this.dbName = dbName;
+        this.options = options || { createsOriginals: false };
     }
     
     private getAllRequiredStores(storeNames: string[]): Set<string> {
         const allRequiredStores = new Set<string>();
-        const createsOriginals = this.dbName.includes('_file_');
         storeNames.forEach(name => {
             allRequiredStores.add(name);
-            if (createsOriginals && !name.endsWith('_original')) {
+            if (this.options.createsOriginals && !name.endsWith('_original')) {
                 allRequiredStores.add(`${name}_original`);
             }
         });

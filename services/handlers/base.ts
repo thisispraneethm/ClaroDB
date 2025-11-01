@@ -1,10 +1,5 @@
 
-import { TableSchema } from '../../types';
-
-export interface Correction {
-  question: string;
-  sql: string;
-}
+import { TableSchema, Correction } from '../../types';
 
 export abstract class DataHandler {
   abstract connect(): Promise<void>;

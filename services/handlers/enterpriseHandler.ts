@@ -1,6 +1,7 @@
-import { DataHandler, Correction } from './base';
-import { TableSchema } from '../../types';
-import { DataProcessingError, QueryExecutionError } from '../../utils/exceptions';
+
+import { DataHandler } from './base';
+import { TableSchema, Correction, isCorrectionArray } from '../../types';
+import { QueryExecutionError } from '../../utils/exceptions';
 // @ts-ignore
 import alasql from 'alasql';
 import { IndexedDBManager } from '../db/indexedDBManager';
@@ -27,15 +28,6 @@ const mockData = {
     ]
 };
 const CORRECTIONS_STORE_NAME = 'corrections_enterprise';
-
-// Type guard to validate the structure of Correction objects at runtime.
-function isCorrection(obj: any): obj is Correction {
-  return obj && typeof obj.question === 'string' && typeof obj.sql === 'string';
-}
-
-function isCorrectionArray(obj: any): obj is Correction[] {
-    return Array.isArray(obj) && obj.every(isCorrection);
-}
 
 export class EnterpriseDataHandler extends DataHandler {
     private dbManager: IndexedDBManager | null = null;

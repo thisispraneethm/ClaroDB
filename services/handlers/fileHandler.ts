@@ -1,5 +1,6 @@
-import { DataHandler, Correction } from './base';
-import { TableSchema } from '../../types';
+
+import { DataHandler } from './base';
+import { TableSchema, Correction, isCorrectionArray } from '../../types';
 import { DataProcessingError, QueryExecutionError } from '../../utils/exceptions';
 // @ts-ignore
 import alasql from 'alasql';
@@ -11,20 +12,12 @@ export interface FileSource {
 }
 const CORRECTIONS_STORE_NAME = 'corrections';
 
-// Type guard to validate the structure of Correction objects at runtime.
-function isCorrection(obj: any): obj is Correction {
-  return obj && typeof obj.question === 'string' && typeof obj.sql === 'string';
-}
-
-function isCorrectionArray(obj: any): obj is Correction[] {
-    return Array.isArray(obj) && obj.every(isCorrection);
-}
-
 export class FileDataHandler extends DataHandler {
     private dbManager: IndexedDBManager | null = null;
     private dbName: string;
     private tableNames: string[] = [];
     private workspaceId: string;
+    private tempAlaSqlDb: any | null = null;
 
     constructor(workspaceId: string) {
         super();
@@ -34,7 +27,7 @@ export class FileDataHandler extends DataHandler {
 
     async connect(): Promise<void> {
         if (this.dbManager) return;
-        this.dbManager = new IndexedDBManager(this.dbName);
+        this.dbManager = new IndexedDBManager(this.dbName, { createsOriginals: true });
     }
 
     private checkDbManager() {
@@ -46,6 +39,7 @@ export class FileDataHandler extends DataHandler {
     async loadFiles(sources: FileSource[]): Promise<void> {
         this.checkDbManager();
         this.tableNames = [];
+        this.tempAlaSqlDb = null;
         const requiredStores = [CORRECTIONS_STORE_NAME];
 
         try {
@@ -64,7 +58,7 @@ export class FileDataHandler extends DataHandler {
                     try {
                         const options = { headers: true, separator: sep };
                         const result = (alasql as any)('SELECT * FROM CSV(?, ?)', [content, options]);
-                        if (Array.isArray(result) && result.length > 0 && Object.keys(result[0]).length > 1) {
+                        if (Array.isArray(result) && result.length > 0 && Object.keys(result[0]).length >= 1) {
                             return result;
                         }
                     } catch (e) {}
@@ -110,9 +104,17 @@ export class FileDataHandler extends DataHandler {
                 await this.dbManager.addData(`${source.name}_original`, data);
                 await this.dbManager.addData(source.name, data);
             }
+            
+            // Performance: Pre-load data into an in-memory AlaSQL instance for fast querying.
+            this.tempAlaSqlDb = new alasql.Database();
+            for (const tableName of this.tableNames) {
+                const tableData = await this.dbManager.getData(tableName);
+                this.tempAlaSqlDb.exec(`CREATE TABLE [${tableName}]`);
+                (this.tempAlaSqlDb.tables[tableName] as any).data = tableData;
+            }
+
         } catch (e: any) {
-            // Do not terminate. Let the caller decide how to handle the error.
-            // The UI will reset, and the next successful load will overwrite any partial state.
+            this.tempAlaSqlDb = null;
             if (e instanceof DataProcessingError) throw e;
             const errorMessage = e.message || 'An unknown error occurred during file processing.';
             throw new DataProcessingError(`Failed to process file(s): ${errorMessage}`);
@@ -128,14 +130,13 @@ export class FileDataHandler extends DataHandler {
         }
 
         const totalRows = original.length;
-        if (size >= totalRows) {
-            await this.dbManager.addData(tableName, original); // Restore full original data
-            return false; // Not sampled
-        }
-
         let sampledData: Record<string, any>[];
+        let wasSampled = true;
 
-        if (method === 'random') {
+        if (size >= totalRows) {
+            sampledData = original; // Restore full original data
+            wasSampled = false;
+        } else if (method === 'random') {
             // AlaSQL's TABLESAMPLE is not supported. Implement random sampling using Fisher-Yates shuffle.
             const shuffled = [...original]; // Create a shallow copy
             for (let i = shuffled.length - 1; i > 0; i--) {
@@ -164,7 +165,13 @@ export class FileDataHandler extends DataHandler {
         }
         
         await this.dbManager.addData(tableName, sampledData);
-        return true; // Sampled
+
+        // Also update the in-memory AlaSQL instance
+        if(this.tempAlaSqlDb && this.tempAlaSqlDb.tables[tableName]) {
+            (this.tempAlaSqlDb.tables[tableName] as any).data = sampledData;
+        }
+
+        return wasSampled;
     }
 
     async getSchemas(): Promise<TableSchema> {
@@ -192,40 +199,22 @@ export class FileDataHandler extends DataHandler {
         this.checkDbManager();
         return this.dbManager.getPreview(tableName, rowCount);
     }
-    
-    private parseTablesFromQuery(query: string): Set<string> {
-        const tableRegex = /(?:FROM|JOIN)\s+\[?(\w+)\]?/ig;
-        const tablesInQuery = new Set<string>();
-        let match;
-        while ((match = tableRegex.exec(query)) !== null) {
-            tablesInQuery.add(match[1]);
-        }
-        return tablesInQuery;
-    }
 
     async executeQuery(query: string): Promise<Record<string, any>[]> {
         this.checkDbManager();
-        try {
-            const tablesInQuery = this.parseTablesFromQuery(query);
-            if (tablesInQuery.size === 0) return alasql(query);
-
-            const tempDb = new alasql.Database();
-            for (const tableNameFromQuery of tablesInQuery) {
-                // Perform a case-insensitive lookup to find the actual table name in IndexedDB.
-                const actualTableName = this.tableNames.find(
-                    storedName => storedName.toLowerCase() === tableNameFromQuery.toLowerCase()
-                );
-
-                if (actualTableName) {
-                    const data = await this.dbManager.getData(actualTableName);
-                    tempDb.exec(`CREATE TABLE [${tableNameFromQuery}]`);
-                    if (data) {
-                        (tempDb.tables[tableNameFromQuery] as any).data = data;
-                    }
-                }
+        if (!this.tempAlaSqlDb) {
+            if (this.tableNames.length === 0) {
+                 try {
+                    // Allow non-db queries like 'SELECT 1'
+                    return alasql(query);
+                 } catch(e: any) {
+                    throw new QueryExecutionError("No data has been loaded to query.");
+                 }
             }
-            
-            return tempDb.exec(query);
+            throw new QueryExecutionError("The in-memory database is not ready. Please load files first.");
+        }
+        try {
+            return this.tempAlaSqlDb.exec(query);
         } catch (e: any) {
             let friendlyMessage = e.message;
             if (typeof friendlyMessage === 'string') {
@@ -253,6 +242,7 @@ export class FileDataHandler extends DataHandler {
             await this.dbManager.deleteDatabase();
             this.dbManager = null;
             this.tableNames = [];
+            this.tempAlaSqlDb = null;
         }
     }
 

@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { TableSchema, Join, Point, ConversationTurn } from '../types';
 import { Loader2, AlertTriangle, Bot, MessageSquare, User } from 'lucide-react';

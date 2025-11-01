@@ -85,3 +85,17 @@ export interface Point {
   x: number;
   y: number;
 }
+
+export interface Correction {
+  question: string;
+  sql: string;
+}
+
+// Type guard to validate the structure of Correction objects at runtime.
+export function isCorrection(obj: any): obj is Correction {
+  return obj && typeof obj.question === 'string' && typeof obj.sql === 'string';
+}
+
+export function isCorrectionArray(obj: any): obj is Correction[] {
+    return Array.isArray(obj) && obj.every(isCorrection);
+}

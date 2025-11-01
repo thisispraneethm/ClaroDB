@@ -1,11 +1,10 @@
 
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { LLMProvider } from './base';
-import { SQLGenerationResult, ChartGenerationResult, TableSchema, InsightGenerationResult, ChartGenerationWithMetadataResult, Join } from '../../types';
+import { SQLGenerationResult, ChartGenerationResult, TableSchema, InsightGenerationResult, ChartGenerationWithMetadataResult, Join, Correction } from '../../types';
 import { LLMGenerationError } from '../../utils/exceptions';
 import { config } from '../../config';
 import { enhancePromptWithSchemaAwareness } from '../../utils/promptEnhancer';
-import { Correction } from "../handlers/base";
 
 // Type alias to handle potential legacy 'dataKey' property for backward compatibility.
 type ParsedChartConfig = ChartGenerationResult & { dataKey?: string };

@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Container from '../components/Container';
 import { TableSchema, Join, Point } from '../types';
-import { Loader2, X, CheckCircle, DatabaseZap } from 'lucide-react';
+import { Loader2, X, CheckCircle, DatabaseZap, AlertTriangle } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAnalysis } from '../hooks/useAnalysis';
 import { v4 as uuidv4 } from 'uuid';
@@ -30,6 +31,7 @@ const EnterpriseDBPage: React.FC = () => {
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [question, setQuestion] = useState('');
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const [modalState, setModalState] = useState<{isOpen: boolean, details: Omit<Join, 'id' | 'joinType'> | null}>({isOpen: false, details: null});
   
@@ -50,6 +52,7 @@ const EnterpriseDBPage: React.FC = () => {
 
   const handleConnect = async () => {
     setIsProcessing(true);
+    setConnectionError(null);
     try {
         await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network latency
         await handler.connect();
@@ -69,7 +72,7 @@ const EnterpriseDBPage: React.FC = () => {
         setPreviewData(newPreviewData);
         setIsConnected(true);
     } catch (e: any) {
-        console.error("Connection failed", e);
+        setConnectionError(e.message || "An unknown error occurred during connection.");
     } finally {
         setIsProcessing(false);
     }
@@ -128,6 +131,15 @@ const EnterpriseDBPage: React.FC = () => {
                     <h1 className="text-xl font-bold text-text">Connect to Database</h1>
                     <p className="text-text-secondary text-sm">This is a simulated connection for demonstration purposes.</p>
                 </div>
+                {connectionError && (
+                     <div className="flex items-start text-danger bg-danger/10 p-3 rounded-lg border border-danger/20 mb-4">
+                        <AlertTriangle size={20} className="mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                            <h4 className="font-semibold">Connection Failed</h4>
+                            <p className="text-sm mt-1">{connectionError}</p>
+                        </div>
+                    </div>
+                )}
                 <div className="space-y-4">
                     <div>
                         <label className={labelClasses}>Host</label>

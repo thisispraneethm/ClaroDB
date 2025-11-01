@@ -1,6 +1,6 @@
 
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useId } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart
@@ -263,6 +263,11 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const insightsContainerRef = useRef<HTMLDivElement>(null);
 
+  const uniqueId = useId();
+  const barShadowId = `bar-shadow-${uniqueId}`;
+  const lineShadowId = `line-shadow-${uniqueId}`;
+  const areaGradientId = `area-gradient-${uniqueId}`;
+
   useEffect(() => {
     setEditableChartConfig(turn.chartResult?.chartConfig || null);
   }, [turn.chartResult]);
@@ -379,9 +384,17 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
       const title = editableChartConfig?.title || 'chart';
       const filename = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
       const a = document.createElement('a');
+      
+      // Dynamically get background color to ensure theme consistency.
+      const bgElement = document.querySelector('.animated-bg-canvas');
+      const bgColor = bgElement ? getComputedStyle(bgElement).backgroundColor : '#F9FAFB'; // Fallback color
 
       if (format === 'svg') {
-          const svgString = new XMLSerializer().serializeToString(svgElement);
+          let svgString = new XMLSerializer().serializeToString(svgElement);
+          const bgRect = `<rect width="100%" height="100%" fill="${bgColor}"></rect>`;
+          // Inject the background rectangle after the opening svg tag
+          svgString = svgString.replace(/<svg(.*?)>/, `<svg$1>${bgRect}`);
+
           const blob = new Blob([svgString], { type: 'image/svg+xml' });
           const url = URL.createObjectURL(blob);
           a.href = url;
@@ -408,9 +421,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
           const url = URL.createObjectURL(svgBlob);
 
           img.onload = () => {
-              // Dynamically get background color to avoid hardcoding and ensure theme consistency.
-              const bgElement = document.querySelector('.animated-bg-canvas');
-              const bgColor = bgElement ? getComputedStyle(bgElement).backgroundColor : '#F9FAFB'; // Fallback color
               ctx.fillStyle = bgColor;
               ctx.fillRect(0, 0, width, height);
               ctx.drawImage(img, 0, 0);
@@ -461,7 +471,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
                       return (
                         <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                           <defs>
-                            <filter id="bar-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                            <filter id={barShadowId} x="-20%" y="-20%" width="140%" height="140%">
                                <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor={PALETTE[0]} floodOpacity="0.3"/>
                             </filter>
                           </defs>
@@ -470,7 +480,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
                           <YAxis tickLine={false} axisLine={false} tick={tickProps} />
                           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
                           <Legend wrapperStyle={{fontSize: "12px"}} />
-                          <Bar dataKey={dataKeys[0]} fill={PALETTE[0]} radius={[6, 6, 0, 0]} style={{ filter: 'url(#bar-shadow)' }}/>
+                          <Bar dataKey={dataKeys[0]} fill={PALETTE[0]} radius={[6, 6, 0, 0]} style={{ filter: `url(#${barShadowId})` }}/>
                         </BarChart>
                       );
                      case 'stackedBar':
@@ -490,7 +500,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
                       return (
                         <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                              <defs>
-                                <filter id="line-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                                <filter id={lineShadowId} x="-50%" y="-50%" width="200%" height="200%">
                                     <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor={PALETTE[0]} floodOpacity="0.4"/>
                                 </filter>
                             </defs>
@@ -499,18 +509,18 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
                             <YAxis tickLine={false} axisLine={false} tick={tickProps} />
                             <Tooltip content={<CustomTooltip />} cursor={{ stroke: PALETTE[0], strokeWidth: 1, strokeDasharray: "4 4" }}/>
                             <Legend wrapperStyle={{fontSize: "12px"}}/>
-                            <Line type="monotone" dataKey={dataKeys[0]} stroke={PALETTE[0]} strokeWidth={2.5} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: PALETTE[0] }} style={{ filter: 'url(#line-shadow)' }}/>
+                            <Line type="monotone" dataKey={dataKeys[0]} stroke={PALETTE[0]} strokeWidth={2.5} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: PALETTE[0] }} style={{ filter: `url(#${lineShadowId})` }}/>
                         </LineChart>
                       );
                     case 'area':
                           return (
                             <AreaChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                                <defs>
-                                <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                                <linearGradient id={areaGradientId} x1="0" y1="0" x2="0" y2="1">
                                   <stop offset="5%" stopColor={PALETTE[0]} stopOpacity={0.4}/>
                                   <stop offset="95%" stopColor={PALETTE[0]} stopOpacity={0.05}/>
                                 </linearGradient>
-                                <filter id="line-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                                <filter id={lineShadowId} x="-50%" y="-50%" width="200%" height="200%">
                                   <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor={PALETTE[0]} floodOpacity="0.4"/>
                                 </filter>
                               </defs>
@@ -519,7 +529,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
                               <YAxis tickLine={false} axisLine={false} tick={tickProps} />
                               <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 8 }}/>
                               <Legend wrapperStyle={{fontSize: "12px"}}/>
-                              <Area type="monotone" dataKey={dataKeys[0]} stroke={PALETTE[0]} strokeWidth={2.5} fill="url(#areaGradient)" dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: PALETTE[0] }} style={{ filter: 'url(#line-shadow)' }} />
+                              <Area type="monotone" dataKey={dataKeys[0]} stroke={PALETTE[0]} strokeWidth={2.5} fill={`url(#${areaGradientId})`} dot={false} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: PALETTE[0] }} style={{ filter: `url(#${lineShadowId})` }} />
                             </AreaChart>
                           );
                     case 'composed':

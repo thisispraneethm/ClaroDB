@@ -1,6 +1,5 @@
 
-import { SQLGenerationResult, ChartGenerationWithMetadataResult, TableSchema, InsightGenerationResult, Join } from '../../types';
-import { Correction } from '../handlers/base';
+import { SQLGenerationResult, ChartGenerationWithMetadataResult, TableSchema, InsightGenerationResult, Join, Correction } from '../../types';
 
 export abstract class LLMProvider {
   abstract generateSQL(prompt: string, schemas: TableSchema, dialect: string, history: { role: string, content: string }[], dataPreview?: Record<string, Record<string, any>[]>, joins?: Join[], corrections?: Correction[]): Promise<SQLGenerationResult>;
