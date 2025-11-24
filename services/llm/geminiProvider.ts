@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { LLMProvider } from './base';
 import { SQLGenerationResult, ChartGenerationResult, TableSchema, InsightGenerationResult, ChartGenerationWithMetadataResult, Join, Correction } from '../../types';
@@ -140,8 +139,8 @@ Constraints:
 - Your entire response must be only the SQL query.
 - Always qualify columns with table names or aliases (e.g., \`sales.product\`).
 - If the question asks for a metric "by" or "for each" of a certain category (e.g., "sales by region", "count of users per country"), you MUST use a GROUP BY clause.
-- **Intelligent Data Enrichment**: You MAY use your general world knowledge to enrich the data. If a question requires a column that is not in the schema but can be logically derived from existing columns (e.g., deriving 'continent' from a 'country' column, or 'day_of_week' from a 'date' column), you MUST generate SQL that creates this new column on the fly, typically using a Common Table Expression (CTE) with a CASE statement.
-- Never hallucinate tables or columns that are not present in the provided schema. The only exception is for new columns that are logically derived from existing data as part of a CTE (e.g., deriving a 'continent' column from a 'country' column).
+- **Intelligent Data Enrichment**: You MUST use your general world knowledge to enrich the data. If a question requires a column that is not in the schema but can be logically derived from existing columns (e.g., deriving 'continent' from a 'country' column, or 'day_of_week' from a 'date' column), you MUST generate SQL that creates this new column on the fly, typically using a Common Table Expression (CTE) with a CASE statement.
+- Never hallucinate tables or columns that are not present in the provided schema.
 - If the question is ambiguous, choose the most conservative interpretation.
 - Return at most 1000 rows unless the user specifies a different limit.
 ${dialectSpecificInstruction}
@@ -171,7 +170,9 @@ ${correctionHint}`;
         contents: contentsPayload,
       });
       
-      const sqlQuery = response.text.replace(/```sql/g, '').replace(/```/g, '').trim();
+      let sqlQuery = response.text.replace(/```sql/g, '').replace(/```/g, '').trim();
+      // Clean up potentially leaked markdown if logic above misses it
+      sqlQuery = sqlQuery.replace(/^```/, '').replace(/```$/, '').trim();
 
       const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
       const completionTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
@@ -297,9 +298,21 @@ OUTPUT REQUIREMENTS:
             },
         });
 
-      const jsonStr = response.text.trim();
+      let jsonStr = response.text.trim();
+      
+      // Robust JSON extraction in case the model wraps it in markdown despite responseMimeType
+      if (jsonStr.includes("```")) {
+          jsonStr = jsonStr.replace(/^```(json)?/gm, "").replace(/```$/gm, "");
+      }
+      
+      const firstBrace = jsonStr.indexOf('{');
+      const lastBrace = jsonStr.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1) {
+          jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+      }
+
       if (!jsonStr) {
-          throw new Error("Generated response is empty.");
+          throw new Error("Generated response is empty or invalid.");
       }
       
       const chartConfig = JSON.parse(jsonStr) as ParsedChartConfig;

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useEffect, useRef, useId } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -437,7 +435,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
 
   const renderChart = () => {
     if (chartLoading) {
-      return <div className="text-center py-8 text-text-secondary flex items-center justify-center"><Loader2 size={20} className="animate-spin mr-2" /> Generating chart...</div>;
+      return <div className="text-center py-8 text-text-secondary flex items-center justify-center min-h-[384px]"><Loader2 size={20} className="animate-spin mr-2" /> Generating chart...</div>;
     }
   
     // A chart has been successfully generated and is ready to be displayed.
@@ -463,7 +461,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
           />
           <div className="h-96 w-full p-4" ref={chartContainerRef}>
               <h4 className="text-center font-semibold mb-4 text-text">{title}</h4>
-              <ResponsiveContainer>
+              <ResponsiveContainer width="100%" height="100%">
                 {(() => {
                   const tickProps = { fontSize: 11, fill: '#5A6474', dy: 5 };
                   switch (chartType) {
@@ -590,12 +588,12 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
     let content: React.ReactNode;
   
     if (!hasData) {
-      content = <div className="text-center py-8 text-text-secondary">No data available to generate a chart.</div>;
+      content = <div className="text-center py-8 text-text-secondary min-h-[384px] flex items-center justify-center">No data available to generate a chart.</div>;
     } else if (hasAttempted) { // Attempted but failed (since editableChartConfig is null)
-      content = <div className="text-center py-8 text-text-secondary">Chart could not be generated for this query.</div>;
+      content = <div className="text-center py-8 text-text-secondary min-h-[384px] flex items-center justify-center">Chart could not be generated for this query.</div>;
     } else { // Not attempted yet, initial state.
       content = (
-        <div className="text-center py-8 text-text-secondary flex flex-col items-center gap-3">
+        <div className="text-center py-8 text-text-secondary flex flex-col items-center justify-center gap-3 min-h-[384px]">
           <BarChart2 size={24} />
           <span>Click the "Generate Chart" button to visualize these results.</span>
         </div>

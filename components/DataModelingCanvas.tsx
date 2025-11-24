@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { TableSchema, Join, Point, ConversationTurn } from '../types';
 import { Loader2, AlertTriangle, Bot, MessageSquare, User } from 'lucide-react';
@@ -77,7 +74,8 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
         if (!joinSource) return new Set<string>();
         const targets = new Set<string>();
         if (schemas) {
-            Object.entries(schemas).forEach(([tableName, columns]) => {
+            Object.keys(schemas).forEach((tableName) => {
+                const columns = schemas[tableName];
                 if (tableName !== joinSource.table) {
                     columns.forEach(col => targets.add(`${tableName}-${col.name}`));
                 }
@@ -86,8 +84,22 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
         return targets;
     }, [joinSource, schemas]);
 
+    // Optimize active join columns calculation to prevent unnecessary re-renders of all cards
+    const activeJoinColumns = useMemo(() => {
+        return new Set<string>(joins.flatMap(j => 
+            (j.id === hoveredJoin || j.table1 === draggedTable || j.table2 === draggedTable) 
+            ? [`${j.table1}-${j.column1}`, `${j.table2}-${j.column2}`] 
+            : []
+        ));
+    }, [joins, hoveredJoin, draggedTable]);
+
     useEffect(() => {
-        chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTo({ 
+                top: chatContainerRef.current.scrollHeight, 
+                behavior: 'smooth' 
+            });
+        }
     }, [conversation]);
 
     const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -131,9 +143,9 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
         window.addEventListener('mouseup', handleMouseUp);
     }, [handleMouseMove, handleMouseUp]);
 
-    const handleCardDrag = (tableName: string, newPosition: Point) => {
+    const handleCardDrag = useCallback((tableName: string, newPosition: Point) => {
       setCardPositions(prev => ({ ...prev, [tableName]: newPosition }));
-    };
+    }, [setCardPositions]);
 
     const handleAutoLayout = () => {
         if (!schemas || Object.keys(schemas).length === 0) return;
@@ -163,7 +175,6 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
                     const u = queue[head++];
                     component.push(u);
                     const neighbors = adjList.get(u);
-                    // FIX: `adjList.get(u)` can return undefined. Added a type guard to ensure `neighbors` is an array before calling `forEach`.
                     if (Array.isArray(neighbors)) {
                         neighbors.forEach(v => {
                             if (!visited.has(v)) {
@@ -212,22 +223,12 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
         setCardPositions(newPositions);
     };
 
-    const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-        e.preventDefault();
-        isResizing.current = true;
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-        document.addEventListener('mousemove', handleResizeMouseMove);
-        document.addEventListener('mouseup', handleResizeMouseUp);
-    }, []);
-
     const handleResizeMouseMove = useCallback((e: MouseEvent) => {
         if (!isResizing.current) return;
         const leftPanelWidth = 384; // w-96
-        const minCanvasWidth = 300; // A reasonable minimum for the canvas
+        const minCanvasWidth = 300; 
         const newWidth = window.innerWidth - e.clientX;
         
-        // Clamp the new width to prevent squishing other panels
         const maxWidth = window.innerWidth - leftPanelWidth - minCanvasWidth;
         const clampedWidth = Math.max(400, Math.min(newWidth, maxWidth));
         
@@ -240,16 +241,33 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
         document.body.style.userSelect = '';
         document.removeEventListener('mousemove', handleResizeMouseMove);
         document.removeEventListener('mouseup', handleResizeMouseUp);
-    }, []);
+    }, [handleResizeMouseMove]);
+
+    const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        isResizing.current = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', handleResizeMouseMove);
+        document.addEventListener('mouseup', handleResizeMouseUp);
+    }, [handleResizeMouseMove, handleResizeMouseUp]);
+
+    // Cleanup listeners on unmount
+    useEffect(() => {
+        return () => {
+            document.removeEventListener('mousemove', handleResizeMouseMove);
+            document.removeEventListener('mouseup', handleResizeMouseUp);
+        };
+    }, [handleResizeMouseMove, handleResizeMouseUp]);
 
     return (
         <div className="flex flex-col h-full bg-transparent overflow-hidden">
             <div className="flex-1 flex overflow-hidden">
-                <aside className="w-96 flex-shrink-0 bg-secondary-background/50 border-r border-border flex flex-col">
+                <aside className="w-96 flex-shrink-0 bg-secondary-background/50 border-r border-border flex flex-col relative z-20">
                     {children}
                 </aside>
 
-                <main className="flex-1 relative overflow-hidden">
+                <main className="flex-1 relative overflow-hidden z-10">
                     <div ref={canvasRef} className="h-full w-full overflow-auto relative bg-dot-grid">
                         {isLoading && <div className="absolute inset-0 z-30 bg-white/50 flex justify-center items-center"><Loader2 className="animate-spin text-primary" size={24} /><span className="ml-2 text-text-secondary">{loadingText}</span></div>}
                         {pageError && (
@@ -287,13 +305,7 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
                                         isSource={joinSource?.table === tableName}
                                         sourceColumn={joinSource?.column}
                                         compatibleTargets={compatibleTargets}
-                                        activeJoinColumns={
-                                            new Set<string>(joins.flatMap(j => 
-                                                (j.id === hoveredJoin || j.table1 === draggedTable || j.table2 === draggedTable) 
-                                                ? [`${j.table1}-${j.column1}`, `${j.table2}-${j.column2}`] 
-                                                : []
-                                            ))
-                                        }
+                                        activeJoinColumns={activeJoinColumns}
                                     />
                                 ))}
                                 <CanvasToolbar onAutoLayout={handleAutoLayout} />
@@ -303,7 +315,7 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
                 </main>
                 
                 {conversation.length > 0 && (
-                    <aside className="flex-shrink-0 flex animate-scale-in" style={{ width: `${resultsPanelWidth}px` }}>
+                    <aside className="flex-shrink-0 flex animate-scale-in z-30" style={{ width: `${resultsPanelWidth}px` }}>
                         <div onMouseDown={handleResizeMouseDown} className="w-1.5 h-full cursor-col-resize bg-border/50 hover:bg-primary transition-colors duration-200"></div>
                         <div className="flex flex-col flex-1 bg-secondary-background/50 border-l border-border overflow-hidden">
                             <div className="p-4 border-b border-border">
@@ -324,7 +336,7 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
                 )}
             </div>
 
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 z-40">
                 <ChatInput value={question} onChange={setQuestion} onSend={onSend} isLoading={isChatDisabled} placeholder={placeholder} disabled={isChatDisabled}/>
             </div>
         </div>

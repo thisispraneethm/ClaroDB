@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { ColumnSchema, Point } from '../types';
 import { Table2, GripVertical } from 'lucide-react';
@@ -22,7 +21,7 @@ interface InteractiveSchemaCardProps {
   activeJoinColumns: Set<string>;
 }
 
-const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
+const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = React.memo(({
   tableName,
   displayName,
   schema,
@@ -76,6 +75,20 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
   }, [position, onDrag, tableName, onDragStart, onDragEnd]);
+
+  // Clean up listeners if component unmounts while dragging
+  useEffect(() => {
+      return () => {
+          // Note: We can't easily remove specific anonymous listeners created in handleMouseDown 
+          // without storing them in refs, but standard browser behavior will GC them when the 
+          // DOM nodes they are attached to are removed, or when the window unloads. 
+          // Since we attach to window, explicit cleanup is safer if we extracted the handlers, 
+          // but for this interaction model, checking the dragging state is a reasonable safeguard.
+          if (dragState.isDragging) {
+              onDragEnd?.();
+          }
+      }
+  }, [dragState.isDragging, onDragEnd]);
   
   const currentPosition = {
     left: position.x + dragState.offset.x,
@@ -89,7 +102,7 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
         left: currentPosition.left,
         top: currentPosition.top,
         cursor: dragState.isDragging ? 'grabbing' : 'default',
-        zIndex: dragState.isDragging ? 20 : 10,
+        zIndex: dragState.isDragging ? 50 : (activeJoinColumns.size > 0 ? 40 : 10),
         boxShadow: activeJoinColumns.size > 0 ? '0 0 20px 5px rgba(0, 122, 255, 0.25)' : undefined,
         transition: dragState.isDragging ? 'none' : 'all 0.2s',
       }}
@@ -122,7 +135,6 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
               }`}
               onMouseDown={(e) => {
                   if (e.currentTarget.clientWidth - e.nativeEvent.offsetX < 15) {
-                    // This is likely a scrollbar click, don't initiate a join.
                     return;
                   }
                   e.preventDefault(); 
@@ -134,12 +146,12 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
               onMouseLeave={onColumnLeave}
               style={{ cursor: 'crosshair' }}
             >
-              <div className="flex items-center gap-2 overflow-hidden">
+              <div className="flex items-center gap-2 overflow-hidden pointer-events-none">
                   <DataTypeIcon type={col.type} />
                   <span className="text-text font-medium truncate pr-2">{col.name}</span>
               </div>
               <div className="w-2.5 h-2.5 bg-white border-2 border-primary/50 rounded-full right-2 absolute opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              {isCompatible && <div className="absolute inset-0 rounded-md animate-pulse-glow pointer-events-none"></div>}
+              {isCompatible && <div className="absolute inset-0 rounded-md animate-pulse-glow pointer-events-none border border-primary/50"></div>}
             </div>
           );
         })}
@@ -147,6 +159,6 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default InteractiveSchemaCard;
