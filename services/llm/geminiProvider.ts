@@ -300,17 +300,16 @@ OUTPUT REQUIREMENTS:
 
       let jsonStr = response.text.trim();
       
-      // Robust JSON extraction in case the model wraps it in markdown despite responseMimeType
-      if (jsonStr.includes("```")) {
+      // Robust JSON extraction using regex to handle arbitrary text wrapping
+      // This regex handles markdown code blocks with or without the 'json' language specifier
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+          jsonStr = jsonMatch[0];
+      } else {
+          // Fallback cleanup if regex misses (unlikely but safe)
           jsonStr = jsonStr.replace(/^```(json)?/gm, "").replace(/```$/gm, "");
       }
       
-      const firstBrace = jsonStr.indexOf('{');
-      const lastBrace = jsonStr.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1) {
-          jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
-      }
-
       if (!jsonStr) {
           throw new Error("Generated response is empty or invalid.");
       }

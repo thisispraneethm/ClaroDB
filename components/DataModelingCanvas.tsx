@@ -56,7 +56,6 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
     const [joinSource, setJoinSource] = useState<{table: string, column: string} | null>(null);
     const [joinTarget, setJoinTarget] = useState<{table: string, column: string} | null>(null);
     const [drawingLine, setDrawingLine] = useState<{start: Point, end: Point} | null>(null);
-    const [hoveredJoin, setHoveredJoin] = useState<string | null>(null);
     const [draggedTable, setDraggedTable] = useState<string | null>(null);
     
     const isResizing = useRef(false);
@@ -85,13 +84,14 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
     }, [joinSource, schemas]);
 
     // Optimize active join columns calculation to prevent unnecessary re-renders of all cards
+    // The calculation only depends on joins and drag state.
     const activeJoinColumns = useMemo(() => {
         return new Set<string>(joins.flatMap(j => 
-            (j.id === hoveredJoin || j.table1 === draggedTable || j.table2 === draggedTable) 
+            (j.table1 === draggedTable || j.table2 === draggedTable) 
             ? [`${j.table1}-${j.column1}`, `${j.table2}-${j.column2}`] 
             : []
         ));
-    }, [joins, hoveredJoin, draggedTable]);
+    }, [joins, draggedTable]);
 
     useEffect(() => {
         if (chatContainerRef.current) {
@@ -223,7 +223,7 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
         setCardPositions(newPositions);
     };
 
-    const handleResizeMouseMove = useCallback((e: MouseEvent) => {
+    const handleResizeMouseMove = useRef((e: MouseEvent) => {
         if (!isResizing.current) return;
         const leftPanelWidth = 384; // w-96
         const minCanvasWidth = 300; 
@@ -233,15 +233,15 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
         const clampedWidth = Math.max(400, Math.min(newWidth, maxWidth));
         
         setResultsPanelWidth(clampedWidth);
-    }, [setResultsPanelWidth]);
+    }).current; // Stable ref for listener
 
-    const handleResizeMouseUp = useCallback(() => {
+    const handleResizeMouseUp = useRef(() => {
         isResizing.current = false;
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         document.removeEventListener('mousemove', handleResizeMouseMove);
         document.removeEventListener('mouseup', handleResizeMouseUp);
-    }, [handleResizeMouseMove]);
+    }).current; // Stable ref for listener
 
     const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
@@ -284,7 +284,7 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
                                 <JoinLines
                                     joins={joins}
                                     drawingLine={drawingLine}
-                                    hoveredJoinId={hoveredJoin}
+                                    hoveredJoinId={null}
                                     cardPositions={cardPositions}
                                     draggedTable={draggedTable}
                                 />

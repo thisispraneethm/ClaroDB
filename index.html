@@ -18,6 +18,7 @@
       body {
         font-family: var(--font-sans);
         background-color: transparent;
+        overflow: hidden; /* Prevent body scroll, handle in app containers */
       }
       .clarodb-loader {
         display: flex;
@@ -81,18 +82,13 @@
       @keyframes move-blob-1 { from { transform: translate(-15%, 5%) scale(1.1); } to { transform: translate(20%, -20%) scale(1.4); } }
       @keyframes move-blob-2 { from { transform: translate(10%, -5%) scale(1.2); } to { transform: translate(-15%, 15%) scale(0.9); } }
       @keyframes move-blob-3 { from { transform: translate(-40%, -40%) scale(0.9); } to { transform: translate(-20%, -60%) scale(1.2); } }
-      .bg-dot-grid {
-        background-color: transparent;
-        background-image: radial-gradient(circle, #E5E7EB 1px, transparent 1px);
-        background-size: 32px 32px;
-      }
-      /* Custom scrollbar for webkit browsers */
-      ::-webkit-scrollbar { width: 6px; height: 6px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.1); border-radius: 20px; }
-      ::-webkit-scrollbar-thumb:hover { background-color: rgba(0,0,0,0.2); }
-      /* Firefox */
+      
+      /* Global Polished Scrollbar */
       * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.1) transparent; }
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.15); border-radius: 20px; border: 3px solid transparent; background-clip: content-box; }
+      ::-webkit-scrollbar-thumb:hover { background-color: rgba(0,0,0,0.3); }
     </style>
     <script>
       tailwind.config = {

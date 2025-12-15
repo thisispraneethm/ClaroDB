@@ -20,15 +20,11 @@ interface JoinLinesProps {
 
 const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId, cardPositions, draggedTable }) => {
   const [linePositions, setLinePositions] = useState<LinePosition[]>([]);
-  const svgRef = useRef<SVGSVGElement>(null);
   const animatedPositionsRef = useRef<Record<string, { p1: Point; p2: Point }>>({});
 
+  // Use fixed positioning relative to viewport to avoid scroll sync lag issues
   const getTargetPositions = useCallback(() => {
-    const canvas = svgRef.current?.parentElement;
-    if (!canvas) return {};
-    
     const targets: Record<string, { p1: Point; p2: Point; join: Join }> = {};
-    const canvasRect = canvas.getBoundingClientRect();
 
     joins.forEach(join => {
       const el1 = document.getElementById(`col-${join.table1}-${join.column1}`);
@@ -38,13 +34,14 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
         const rect1 = el1.getBoundingClientRect();
         const rect2 = el2.getBoundingClientRect();
         
+        // Coordinates are now strictly viewport-relative
         const p1 = {
-          x: rect1.left + rect1.width - canvasRect.left + canvas.scrollLeft,
-          y: rect1.top + rect1.height / 2 - canvasRect.top + canvas.scrollTop,
+          x: rect1.left + rect1.width, // Right edge of source
+          y: rect1.top + rect1.height / 2,
         };
         const p2 = {
-          x: rect2.left - canvasRect.left + canvas.scrollLeft,
-          y: rect2.top + rect2.height / 2 - canvasRect.top + canvas.scrollTop,
+          x: rect2.left, // Left edge of target
+          y: rect2.top + rect2.height / 2,
         };
         targets[join.id] = { p1, p2, join };
       }
@@ -56,6 +53,13 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
     let animationFrameId: number;
 
     const animate = () => {
+      // Only compute if we have joins to draw
+      if (joins.length === 0) {
+        if (linePositions.length > 0) setLinePositions([]);
+        animationFrameId = requestAnimationFrame(animate);
+        return;
+      }
+
       const targets = getTargetPositions();
       const currentAnimated = animatedPositionsRef.current;
 
@@ -65,10 +69,10 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
           currentAnimated[id] = { p1: targets[id].p1, p2: targets[id].p2 };
         }
         
-        currentAnimated[id].p1.x = lerp(currentAnimated[id].p1.x, targets[id].p1.x, 0.2);
-        currentAnimated[id].p1.y = lerp(currentAnimated[id].p1.y, targets[id].p1.y, 0.2);
-        currentAnimated[id].p2.x = lerp(currentAnimated[id].p2.x, targets[id].p2.x, 0.2);
-        currentAnimated[id].p2.y = lerp(currentAnimated[id].p2.y, targets[id].p2.y, 0.2);
+        currentAnimated[id].p1.x = lerp(currentAnimated[id].p1.x, targets[id].p1.x, 0.25);
+        currentAnimated[id].p1.y = lerp(currentAnimated[id].p1.y, targets[id].p1.y, 0.25);
+        currentAnimated[id].p2.x = lerp(currentAnimated[id].p2.x, targets[id].p2.x, 0.25);
+        currentAnimated[id].p2.y = lerp(currentAnimated[id].p2.y, targets[id].p2.y, 0.25);
       }
       
       // Garbage collect deleted joins
@@ -78,7 +82,6 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
           }
       }
 
-      // Create new positions array for rendering
       const newPositions = Object.keys(currentAnimated).map(id => {
         const points = currentAnimated[id];
         return {
@@ -90,21 +93,18 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
       }).filter(p => p.join);
 
       setLinePositions(newPositions);
-
       animationFrameId = requestAnimationFrame(animate);
     };
 
-    // Start the animation loop
     animationFrameId = requestAnimationFrame(animate);
 
-    // Cleanup function to cancel the animation frame on component unmount or dependency change
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
   }, [joins, cardPositions, getTargetPositions]);
 
   return (
-    <svg ref={svgRef} className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>
+    <svg className="fixed top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>
       <defs>
         <linearGradient id="line-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stopColor="#5856D6" />
@@ -121,7 +121,7 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
       
       {linePositions.map(({ id, p1, p2, join }) => {
         const isHot = id === hoveredJoinId || join.table1 === draggedTable || join.table2 === draggedTable;
-        const dx = Math.abs(p2.x - p1.x) * 0.4;
+        const dx = Math.abs(p2.x - p1.x) * 0.5;
         const pathData = `M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}`;
         
         return (
@@ -130,12 +130,12 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
               d={pathData}
               stroke="url(#line-gradient)"
               strokeWidth={isHot ? 3.5 : 2}
-              strokeOpacity={isHot ? 1 : 0.7}
+              strokeOpacity={isHot ? 1 : 0.6}
               fill="none"
               className="transition-all duration-200"
             />
-            <circle cx={p1.x} cy={p1.y} r={isHot ? 5 : 4} fill="white" stroke={isHot ? "#5856D6" : "#007AFF"} strokeWidth="1.5" className="transition-all duration-200" />
-            <circle cx={p2.x} cy={p2.y} r={isHot ? 5 : 4} fill="white" stroke={isHot ? "#007AFF" : "#5856D6"} strokeWidth="1.5" className="transition-all duration-200" />
+            <circle cx={p1.x} cy={p1.y} r={isHot ? 5 : 3.5} fill="white" stroke={isHot ? "#5856D6" : "#007AFF"} strokeWidth="1.5" />
+            <circle cx={p2.x} cy={p2.y} r={isHot ? 5 : 3.5} fill="white" stroke={isHot ? "#007AFF" : "#5856D6"} strokeWidth="1.5" />
           </g>
         );
       })}

@@ -303,7 +303,11 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
         const categorical: string[] = [];
         const all = Object.keys(data[0]);
         for (const header of all) {
-            const isNumeric = data.every(row => row[header] === null || typeof row[header] === 'number');
+            // Robust check for numeric columns that handles null/undefined
+            const isNumeric = data.every(row => {
+                const val = row[header];
+                return val === null || val === undefined || typeof val === 'number';
+            });
             if (isNumeric) {
                 numeric.push(header);
             } else {
@@ -441,6 +445,13 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ turn, onGenerateInsight
     // A chart has been successfully generated and is ready to be displayed.
     if (editableChartConfig && data && data.length > 0) {
       const { chartType, dataKeys, nameKey, title, composedTypes } = editableChartConfig;
+      
+      // Safety check: ensure required keys exist in data before rendering
+      const hasValidKeys = dataKeys.every(k => k in data[0]) && nameKey in data[0];
+      if (!hasValidKeys) {
+           return <div className="text-center py-8 text-text-secondary min-h-[384px] flex items-center justify-center">Chart configuration mismatch. Please regenerate.</div>;
+      }
+
       return (
         <div className="w-full bg-card/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-card">
           <div className="px-4 py-2 border-b border-black/5">
