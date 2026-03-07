@@ -163,16 +163,36 @@ ${correctionHint}`;
     const contentsPayload = `${systemPrompt}\n\n${historyStr ? `--- Conversation History ---\n${historyStr}\n\n` : ''}${currentQuestionStr}`;
 
     try {
-      const modelName = 'gemini-2.5-flash';
+      const modelName = 'gemini-3-flash-preview';
       
       const response: GenerateContentResponse = await this.ai.models.generateContent({
         model: modelName,
-        contents: contentsPayload,
+        contents: `${historyStr ? `--- Conversation History ---\n${historyStr}\n\n` : ''}${currentQuestionStr}`,
+        config: {
+            systemInstruction: systemPrompt,
+            temperature: 0
+        }
       });
       
-      let sqlQuery = response.text.replace(/```sql/g, '').replace(/```/g, '').trim();
-      // Clean up potentially leaked markdown if logic above misses it
-      sqlQuery = sqlQuery.replace(/^```/, '').replace(/```$/, '').trim();
+      let sqlQuery = response.text;
+      
+      // Remove markdown code blocks if present
+      const sqlMatch = sqlQuery.match(/```sql\s*([\s\S]*?)\s*```/i) || sqlQuery.match(/```\s*([\s\S]*?)\s*```/i);
+      if (sqlMatch) {
+          sqlQuery = sqlMatch[1];
+      } else {
+          // Fallback: remove any leading/trailing backticks and "sql" markers
+          sqlQuery = sqlQuery.replace(/^```sql/i, '').replace(/^```/, '').replace(/```$/, '').trim();
+      }
+      
+      // Final pass to remove any remaining non-SQL text if the LLM was chatty
+      // We look for the first SELECT/WITH/INSERT/UPDATE/DELETE
+      const firstKeywordMatch = sqlQuery.match(/(SELECT|WITH|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)\b/i);
+      if (firstKeywordMatch && firstKeywordMatch.index !== undefined && firstKeywordMatch.index > 0) {
+          sqlQuery = sqlQuery.substring(firstKeywordMatch.index);
+      }
+      
+      sqlQuery = sqlQuery.trim();
 
       const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
       const completionTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
@@ -213,11 +233,15 @@ ${correctionHint}`;
     const contentsPayload = `${systemInstruction}\n\n${userPrompt}`;
 
     try {
-      const modelName = 'gemini-2.5-flash';
+      const modelName = 'gemini-3-flash-preview';
 
       const response = await this.ai.models.generateContent({
         model: modelName,
-        contents: contentsPayload,
+        contents: userPrompt,
+        config: {
+            systemInstruction,
+            temperature: 0.2
+        }
       });
       
       const promptTokens = response.usageMetadata?.promptTokenCount ?? 0;
@@ -271,13 +295,13 @@ OUTPUT REQUIREMENTS:
     
     const userPrompt = "Generate the chart configuration JSON for the provided context.";
 
-    const contentsPayload = `${systemPrompt}\n\n${userPrompt}`;
-
     try {
+        const modelName = "gemini-3-flash-preview";
         const response = await this.ai.models.generateContent({
             model: modelName,
-            contents: contentsPayload,
+            contents: `Context: ${userPrompt}\nQuestion: "${question}"\nColumns: ${columns.join(', ')}\nData Preview: ${dataPreview}`,
             config: {
+                systemInstruction: systemPrompt,
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
@@ -295,19 +319,21 @@ OUTPUT REQUIREMENTS:
                     },
                     required: ["chartType", "dataKeys", "nameKey", "title"]
                 },
+                temperature: 0.1
             },
         });
 
       let jsonStr = response.text.trim();
       
-      // Robust JSON extraction using regex to handle arbitrary text wrapping
-      // This regex handles markdown code blocks with or without the 'json' language specifier
-      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-          jsonStr = jsonMatch[0];
+      // Robust JSON extraction: find the first '{' and the last '}'
+      const firstBrace = jsonStr.indexOf('{');
+      const lastBrace = jsonStr.lastIndexOf('}');
+      
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
       } else {
-          // Fallback cleanup if regex misses (unlikely but safe)
-          jsonStr = jsonStr.replace(/^```(json)?/gm, "").replace(/```$/gm, "");
+          // Fallback cleanup if braces are missing or malformed
+          jsonStr = jsonStr.replace(/^```(json)?/gm, "").replace(/```$/gm, "").trim();
       }
       
       if (!jsonStr) {

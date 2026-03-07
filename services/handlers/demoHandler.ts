@@ -28,32 +28,44 @@ const DEMO_DB_NAME = 'clarodb_demo_stable'; // Use a static name to prevent DB l
 export class DemoDataHandler extends DataHandler {
     private dbManager: IndexedDBManager | null = null;
     private tempAlaSqlDb: any | null = null;
+    private pendingConnect: Promise<void> | null = null;
 
     constructor() {
         super();
     }
 
     async connect(): Promise<void> {
-        if (this.dbManager && this.tempAlaSqlDb) return;
+        if (this.pendingConnect) return this.pendingConnect;
 
-        try {
-            this.dbManager = new IndexedDBManager(DEMO_DB_NAME);
-            await this.dbManager.open([DEMO_TABLE_NAME, CORRECTIONS_STORE_NAME]);
-            
-            // Only add data if the store is empty to prevent re-writes on every load
-            const existingData = await this.dbManager.getPreview(DEMO_TABLE_NAME, 1);
-            if (existingData.length === 0) {
-              await this.dbManager.addData(DEMO_TABLE_NAME, demoSalesData);
+        this.pendingConnect = (async () => {
+            if (this.dbManager && this.tempAlaSqlDb) return;
+
+            try {
+                this.dbManager = new IndexedDBManager(DEMO_DB_NAME);
+                await this.dbManager.open([DEMO_TABLE_NAME, CORRECTIONS_STORE_NAME]);
+                
+                // Only add data if the store is empty to prevent re-writes on every load
+                const existingData = await this.dbManager.getPreview(DEMO_TABLE_NAME, 1);
+                if (existingData.length === 0) {
+                  await this.dbManager.addData(DEMO_TABLE_NAME, demoSalesData);
+                }
+                
+                // Performance: Pre-load data into a persistent in-memory AlaSQL instance
+                const data = await this.dbManager.getData(DEMO_TABLE_NAME);
+                this.tempAlaSqlDb = new alasql.Database();
+                this.tempAlaSqlDb.exec(`CREATE TABLE ${DEMO_TABLE_NAME}`);
+                (this.tempAlaSqlDb.tables[DEMO_TABLE_NAME] as any).data = data;
+            } catch (e: any) {
+                // Clear state on failure so retry can happen
+                this.dbManager = null;
+                this.tempAlaSqlDb = null;
+                throw new DataProcessingError(`Failed to initialize IndexedDB for demo: ${e.message}`);
+            } finally {
+                this.pendingConnect = null;
             }
-            
-            // Performance: Pre-load data into a persistent in-memory AlaSQL instance
-            const data = await this.dbManager.getData(DEMO_TABLE_NAME);
-            this.tempAlaSqlDb = new alasql.Database();
-            this.tempAlaSqlDb.exec(`CREATE TABLE ${DEMO_TABLE_NAME}`);
-            (this.tempAlaSqlDb.tables[DEMO_TABLE_NAME] as any).data = data;
-        } catch (e: any) {
-            throw new DataProcessingError(`Failed to initialize IndexedDB for demo: ${e.message}`);
-        }
+        })();
+
+        return this.pendingConnect;
     }
 
     private checkDbManager() {

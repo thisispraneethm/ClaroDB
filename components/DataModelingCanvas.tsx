@@ -59,14 +59,14 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
     const [draggedTable, setDraggedTable] = useState<string | null>(null);
     
     const isResizing = useRef(false);
-
     const canvasRef = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
     
     // Use refs to hold the latest values for join source/target to avoid stale closures in event listeners
     const joinSourceRef = useRef(joinSource);
-    useEffect(() => { joinSourceRef.current = joinSource; }, [joinSource]);
     const joinTargetRef = useRef(joinTarget);
+    
+    useEffect(() => { joinSourceRef.current = joinSource; }, [joinSource]);
     useEffect(() => { joinTargetRef.current = joinTarget; }, [joinTarget]);
 
     const compatibleTargets = useMemo(() => {
@@ -104,18 +104,17 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
 
     const handleMouseMove = useCallback((e: MouseEvent) => {
         if (!joinSourceRef.current || !canvasRef.current) return;
-        const canvasRect = canvasRef.current.getBoundingClientRect();
         const startEl = document.getElementById(`col-${joinSourceRef.current.table}-${joinSourceRef.current.column}`);
         if (!startEl) return;
 
         const startRect = startEl.getBoundingClientRect();
         const start = {
-            x: startRect.left + startRect.width - canvasRect.left + canvasRef.current.scrollLeft,
-            y: startRect.top + startRect.height / 2 - canvasRect.top + canvasRef.current.scrollTop,
+            x: startRect.left + startRect.width,
+            y: startRect.top + startRect.height / 2,
         };
         const end = {
-            x: e.clientX - canvasRect.left + canvasRef.current.scrollLeft,
-            y: e.clientY - canvasRect.top + canvasRef.current.scrollTop,
+            x: e.clientX,
+            y: e.clientY,
         };
         setDrawingLine({ start, end });
     }, []);
@@ -223,7 +222,7 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
         setCardPositions(newPositions);
     };
 
-    const handleResizeMouseMove = useRef((e: MouseEvent) => {
+    const handleResizeMouseMove = useCallback((e: MouseEvent) => {
         if (!isResizing.current) return;
         const leftPanelWidth = 384; // w-96
         const minCanvasWidth = 300; 
@@ -233,15 +232,15 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
         const clampedWidth = Math.max(400, Math.min(newWidth, maxWidth));
         
         setResultsPanelWidth(clampedWidth);
-    }).current; // Stable ref for listener
+    }, [setResultsPanelWidth]);
 
-    const handleResizeMouseUp = useRef(() => {
+    const handleResizeMouseUp = useCallback(() => {
         isResizing.current = false;
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         document.removeEventListener('mousemove', handleResizeMouseMove);
         document.removeEventListener('mouseup', handleResizeMouseUp);
-    }).current; // Stable ref for listener
+    }, [handleResizeMouseMove]);
 
     const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
         e.preventDefault();

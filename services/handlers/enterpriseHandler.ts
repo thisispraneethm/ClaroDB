@@ -33,23 +33,38 @@ export class EnterpriseDataHandler extends DataHandler {
     private dbManager: IndexedDBManager | null = null;
     private dbName = 'clarodb_enterprise';
     private tempAlaSqlDb: any | null = null;
+    private pendingConnect: Promise<void> | null = null;
 
     constructor() {
         super();
     }
 
     async connect(): Promise<void> {
-        // This simulates connecting to a remote DB and loading data into the browser for querying
-        if (this.tempAlaSqlDb) return;
-        
-        this.dbManager = new IndexedDBManager(this.dbName);
-        await this.dbManager.open([CORRECTIONS_STORE_NAME]);
+        if (this.pendingConnect) return this.pendingConnect;
 
-        this.tempAlaSqlDb = new alasql.Database();
-        for (const tableName in mockData) {
-            this.tempAlaSqlDb.exec(`CREATE TABLE ${tableName}`);
-            (this.tempAlaSqlDb.tables[tableName] as any).data = (mockData as any)[tableName];
-        }
+        this.pendingConnect = (async () => {
+            // This simulates connecting to a remote DB and loading data into the browser for querying
+            if (this.tempAlaSqlDb) return;
+            
+            try {
+                this.dbManager = new IndexedDBManager(this.dbName);
+                await this.dbManager.open([CORRECTIONS_STORE_NAME]);
+
+                this.tempAlaSqlDb = new alasql.Database();
+                for (const tableName in mockData) {
+                    this.tempAlaSqlDb.exec(`CREATE TABLE ${tableName}`);
+                    (this.tempAlaSqlDb.tables[tableName] as any).data = (mockData as any)[tableName];
+                }
+            } catch (e: any) {
+                this.dbManager = null;
+                this.tempAlaSqlDb = null;
+                throw e;
+            } finally {
+                this.pendingConnect = null;
+            }
+        })();
+
+        return this.pendingConnect;
     }
 
     private checkDb() {

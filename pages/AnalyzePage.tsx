@@ -146,9 +146,20 @@ const AnalyzePage: React.FC = () => {
     
     return (
         <div className="space-y-6 animate-fade-in-up">
-            <Container title="1. Upload Data">
-                <FileUpload file={file} onFilesChange={handleFileChange} disabled={isProcessingFile || isAnalysisLoading} />
-            </Container>
+            <div className="flex justify-between items-end">
+                <div className="flex-1 mr-4">
+                    <Container title="1. Upload Data">
+                        <FileUpload file={file} onFilesChange={handleFileChange} disabled={isProcessingFile || isAnalysisLoading} />
+                    </Container>
+                </div>
+                <button 
+                    onClick={() => handleFileChange([])}
+                    className="mb-1 px-4 py-2 text-sm font-medium text-danger hover:bg-danger/10 rounded-lg border border-danger/20 transition-colors"
+                    disabled={isProcessingFile || isAnalysisLoading}
+                >
+                    Clear Workspace
+                </button>
+            </div>
 
             {isProcessingFile && <div className="flex justify-center items-center"><Loader2 className="animate-spin text-primary" size={24} /><span className="ml-2 text-text-secondary">Processing file...</span></div>}
             

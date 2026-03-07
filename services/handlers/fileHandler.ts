@@ -18,6 +18,7 @@ export class FileDataHandler extends DataHandler {
     private tableNames: string[] = [];
     private workspaceId: string;
     private tempAlaSqlDb: any | null = null;
+    private pendingConnect: Promise<void> | null = null;
 
     constructor(workspaceId: string) {
         super();
@@ -26,8 +27,14 @@ export class FileDataHandler extends DataHandler {
     }
 
     async connect(): Promise<void> {
-        if (this.dbManager) return;
-        this.dbManager = new IndexedDBManager(this.dbName, { createsOriginals: true });
+        if (this.pendingConnect) return this.pendingConnect;
+
+        this.pendingConnect = (async () => {
+            if (this.dbManager) return;
+            this.dbManager = new IndexedDBManager(this.dbName, { createsOriginals: true });
+        })();
+
+        return this.pendingConnect;
     }
 
     private checkDbManager() {

@@ -213,6 +213,15 @@ const EngineerJoinPage: React.FC = () => {
         >
             {/* Left sidebar content */}
             <div className="p-4 space-y-4 overflow-y-auto">
+                <div className="flex justify-between items-center mb-2">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-text-secondary">Workspace</h2>
+                    <button 
+                        onClick={resetWorkspace}
+                        className="text-xs text-danger hover:underline font-medium"
+                    >
+                        Reset All
+                    </button>
+                </div>
                 <Container title="1. Upload Datasets">
                     <MultiFileUpload files={files} onFilesChange={handleFilesChange} disabled={isProcessing} />
                 </Container>

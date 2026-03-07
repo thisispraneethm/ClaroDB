@@ -3,6 +3,7 @@ export class IndexedDBManager {
     private db: IDBDatabase | null = null;
     private dbName: string;
     private options: { createsOriginals: boolean };
+    private pendingOpen: Promise<void> | null = null;
 
     constructor(dbName: string, options?: { createsOriginals: boolean }) {
         this.dbName = dbName;
@@ -21,22 +22,31 @@ export class IndexedDBManager {
     }
 
     public open(storeNames: string[]): Promise<void> {
-        return new Promise((resolve, reject) => {
+        if (this.pendingOpen) return this.pendingOpen;
+
+        this.pendingOpen = new Promise((resolve, reject) => {
+            const cleanup = () => {
+                this.pendingOpen = null;
+            };
+
             if (this.db) {
                 const existingStores = Array.from(this.db.objectStoreNames);
                 const allRequiredStores = this.getAllRequiredStores(storeNames);
                 const sameStores = existingStores.length === allRequiredStores.size && existingStores.every(s => allRequiredStores.has(s));
                 if (sameStores) {
+                    cleanup();
                     return resolve();
                 }
                 this.db.close();
                 this.db = null;
             }
             
-            // Open without a version first to inspect the current state
             const request = indexedDB.open(this.dbName);
 
-            request.onerror = () => reject(new Error("Failed to open IndexedDB."));
+            request.onerror = () => {
+                cleanup();
+                reject(new Error("Failed to open IndexedDB."));
+            };
             
             request.onsuccess = (event) => {
                 const db = (event.target as IDBOpenDBRequest).result;
@@ -46,6 +56,7 @@ export class IndexedDBManager {
 
                 if (schemaIsCorrect) {
                     this.db = db;
+                    cleanup();
                     return resolve();
                 }
 
@@ -55,7 +66,10 @@ export class IndexedDBManager {
 
                 const upgradeRequest = indexedDB.open(this.dbName, newVersion);
 
-                upgradeRequest.onerror = () => reject(new Error("Failed to upgrade IndexedDB."));
+                upgradeRequest.onerror = () => {
+                    cleanup();
+                    reject(new Error("Failed to upgrade IndexedDB."));
+                };
 
                 upgradeRequest.onupgradeneeded = (upgradeEvent) => {
                     const upgradeDb = (upgradeEvent.target as IDBOpenDBRequest).result;
@@ -77,20 +91,25 @@ export class IndexedDBManager {
                 
                 upgradeRequest.onsuccess = (upgradeSuccessEvent) => {
                     this.db = (upgradeSuccessEvent.target as IDBOpenDBRequest).result;
+                    cleanup();
                     resolve();
                 };
 
                 upgradeRequest.onblocked = () => {
                     console.warn(`IndexedDB upgrade request for "${this.dbName}" is blocked.`);
+                    cleanup();
                     reject(new Error("Database upgrade is blocked. Please close other tabs with this application."));
                 };
             };
             
             request.onblocked = () => {
                 console.warn(`IndexedDB open request for "${this.dbName}" is blocked.`);
+                cleanup();
                 reject(new Error("Database connection is blocked. Please close other tabs with this application and refresh."));
             }
         });
+
+        return this.pendingOpen;
     }
 
     private getDb(): IDBDatabase {

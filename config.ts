@@ -10,15 +10,19 @@ export interface AppConfig {
 }
 
 function getAppConfig(): AppConfig {
-    const apiKey = process.env.API_KEY;
+    const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-        throw new Error("API_KEY environment variable not set. This is a hard requirement for the application to run.");
+        throw new Error("Gemini API key not found. Please ensure GEMINI_API_KEY or API_KEY is set.");
     }
 
     return {
         apiKey,
         llmPricing: {
+            "gemini-3-flash-preview": {
+                prompt: 0.1,
+                completion: 0.4,
+            },
             "gemini-2.5-flash": {
                 prompt: 0.25,
                 completion: 0.50,
