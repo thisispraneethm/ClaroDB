@@ -51,28 +51,40 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
 
   useLayoutEffect(() => {
     let animationFrameId: number;
+    let isActive = true;
 
     const animate = () => {
-      // Only compute if we have joins to draw
+      if (!isActive) return;
       if (joins.length === 0) {
         if (linePositions.length > 0) setLinePositions([]);
-        animationFrameId = requestAnimationFrame(animate);
         return;
       }
 
       const targets = getTargetPositions();
       const currentAnimated = animatedPositionsRef.current;
+      let needsAnotherFrame = false;
 
       // Initialize or update animated positions
       for (const id in targets) {
         if (!currentAnimated[id]) {
-          currentAnimated[id] = { p1: targets[id].p1, p2: targets[id].p2 };
+          currentAnimated[id] = { p1: { ...targets[id].p1 }, p2: { ...targets[id].p2 } };
         }
         
-        currentAnimated[id].p1.x = lerp(currentAnimated[id].p1.x, targets[id].p1.x, 0.25);
-        currentAnimated[id].p1.y = lerp(currentAnimated[id].p1.y, targets[id].p1.y, 0.25);
-        currentAnimated[id].p2.x = lerp(currentAnimated[id].p2.x, targets[id].p2.x, 0.25);
-        currentAnimated[id].p2.y = lerp(currentAnimated[id].p2.y, targets[id].p2.y, 0.25);
+        const dx1 = targets[id].p1.x - currentAnimated[id].p1.x;
+        const dy1 = targets[id].p1.y - currentAnimated[id].p1.y;
+        const dx2 = targets[id].p2.x - currentAnimated[id].p2.x;
+        const dy2 = targets[id].p2.y - currentAnimated[id].p2.y;
+
+        if (Math.abs(dx1) > 0.25 || Math.abs(dy1) > 0.25 || Math.abs(dx2) > 0.25 || Math.abs(dy2) > 0.25) {
+          currentAnimated[id].p1.x = lerp(currentAnimated[id].p1.x, targets[id].p1.x, 0.25);
+          currentAnimated[id].p1.y = lerp(currentAnimated[id].p1.y, targets[id].p1.y, 0.25);
+          currentAnimated[id].p2.x = lerp(currentAnimated[id].p2.x, targets[id].p2.x, 0.25);
+          currentAnimated[id].p2.y = lerp(currentAnimated[id].p2.y, targets[id].p2.y, 0.25);
+          needsAnotherFrame = true;
+        } else {
+          currentAnimated[id].p1 = { ...targets[id].p1 };
+          currentAnimated[id].p2 = { ...targets[id].p2 };
+        }
       }
       
       // Garbage collect deleted joins
@@ -88,23 +100,37 @@ const JoinLines: React.FC<JoinLinesProps> = ({ joins, drawingLine, hoveredJoinId
             id,
             p1: points.p1,
             p2: points.p2,
-            join: joins.find(j => j.id === id)!,
+            join: joins.find(j => j.id === id),
         };
-      }).filter(p => p.join);
+      }).filter((p): p is { id: string; p1: Point; p2: Point; join: Join } => !!p.join);
 
       setLinePositions(newPositions);
+
+      if (needsAnotherFrame) {
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+
+    const triggerUpdate = () => {
+      cancelAnimationFrame(animationFrameId);
       animationFrameId = requestAnimationFrame(animate);
     };
 
-    animationFrameId = requestAnimationFrame(animate);
+    triggerUpdate();
+
+    window.addEventListener('scroll', triggerUpdate, true);
+    window.addEventListener('resize', triggerUpdate, true);
 
     return () => {
+      isActive = false;
       cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('scroll', triggerUpdate, true);
+      window.removeEventListener('resize', triggerUpdate, true);
     };
   }, [joins, cardPositions, getTargetPositions]);
 
   return (
-    <svg className="fixed top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>
+    <svg className="fixed top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 40 }}>
       <defs>
         <linearGradient id="line-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stopColor="#5856D6" />

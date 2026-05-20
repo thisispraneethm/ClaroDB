@@ -47,7 +47,10 @@ export const useAnalysis = ({ handler, llmProvider, conversation, setConversatio
       // Fetch corrections to provide as learning examples
       const corrections = await handler.getCorrections(5);
 
-      const sqlResult = await llmProvider.generateSQL(currentQuestion, schemas, handler.getDialect(), history, previewData, joins, corrections);
+      // Limit history to the last 10 turns to prevent context window overflow
+      const prunedHistory = history.slice(-20); // 10 pairs of user/assistant
+
+      const sqlResult = await llmProvider.generateSQL(currentQuestion, schemas, handler.getDialect(), prunedHistory, previewData, joins, corrections);
       
       if (controller.signal.aborted) return;
 

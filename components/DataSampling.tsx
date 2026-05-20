@@ -59,7 +59,10 @@ const DataSampling: React.FC<DataSamplingProps> = ({ schemas, onApplySampling, d
                 <input 
                     type="number" 
                     value={size} 
-                    onChange={e => setSize(Math.max(1, parseInt(e.target.value, 10)))} 
+                    onChange={e => {
+                        const parsed = parseInt(e.target.value, 10);
+                        setSize(isNaN(parsed) ? 1 : Math.max(1, parsed));
+                    }} 
                     className={inputClasses} 
                     disabled={disabled}
                 />

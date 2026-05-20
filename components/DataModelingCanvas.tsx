@@ -225,11 +225,11 @@ const DataModelingCanvas: React.FC<DataModelingCanvasProps> = ({
     const handleResizeMouseMove = useCallback((e: MouseEvent) => {
         if (!isResizing.current) return;
         const leftPanelWidth = 384; // w-96
-        const minCanvasWidth = 300; 
+        const minCanvasWidth = 400; // Hard limit for canvas
         const newWidth = window.innerWidth - e.clientX;
         
         const maxWidth = window.innerWidth - leftPanelWidth - minCanvasWidth;
-        const clampedWidth = Math.max(400, Math.min(newWidth, maxWidth));
+        const clampedWidth = Math.max(300, Math.min(newWidth, maxWidth));
         
         setResultsPanelWidth(clampedWidth);
     }, [setResultsPanelWidth]);

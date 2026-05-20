@@ -191,7 +191,15 @@ export class FileDataHandler extends DataHandler {
                  schemas[tableName] = headers.map(key => {
                      const isNumeric = previewData.every(row => {
                          const value = row[key];
-                         return value === null || value === '' || typeof value === 'number';
+                         if (value === null || value === '' || value === undefined) return true;
+                         if (typeof value === 'number') return true;
+                         if (typeof value === 'string') {
+                             const trimmed = value.trim();
+                             if (trimmed === '') return true;
+                             const num = Number(trimmed);
+                             return !isNaN(num);
+                         }
+                         return false;
                      });
                      return { name: key, type: isNumeric ? 'NUMBER' : 'TEXT' };
                  });

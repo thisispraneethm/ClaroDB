@@ -22,6 +22,11 @@ const DataTypeIcon: React.FC<DataTypeIconProps> = ({ type }) => {
       icon = <Type size={12} />;
       colorClass = 'text-green-500';
       break;
+    case 'DATE':
+    case 'TIMESTAMP':
+      icon = <span className="text-[10px] font-bold">D</span>;
+      colorClass = 'text-orange-500';
+      break;
     default:
       icon = <span className="text-xs font-mono">?</span>;
       colorClass = 'text-gray-400';

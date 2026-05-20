@@ -38,9 +38,9 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = React.memo((
   compatibleTargets,
   activeJoinColumns,
 }) => {
+  const [dragOffset, setDragOffset] = useState<Point>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartPos = useRef<Point>({ x: 0, y: 0 });
-  const offsetRef = useRef<Point>({ x: 0, y: 0 });
   
   // Refs to hold current listeners so we can remove them in cleanup
   const mouseMoveListenerRef = useRef<((e: MouseEvent) => void) | null>(null);
@@ -67,12 +67,10 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = React.memo((
     
     const handleMouseMove = (moveEvent: MouseEvent) => {
       setIsDragging(true);
-      offsetRef.current = {
+      setDragOffset({
           x: moveEvent.clientX - dragStartPos.current.x,
           y: moveEvent.clientY - dragStartPos.current.y,
-      };
-      // Force render for smooth drag
-      setIsDragging(prev => prev); 
+      });
     };
 
     const handleMouseUp = (upEvent: MouseEvent) => {
@@ -83,7 +81,7 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = React.memo((
       onDrag(tableName, finalPosition);
 
       setIsDragging(false);
-      offsetRef.current = { x: 0, y: 0 };
+      setDragOffset({ x: 0, y: 0 });
       cleanupListeners();
       onDragEnd?.();
     };
@@ -103,8 +101,8 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = React.memo((
   }, [cleanupListeners]);
   
   const currentPosition = {
-    left: position.x + (isDragging ? offsetRef.current.x : 0),
-    top: position.y + (isDragging ? offsetRef.current.y : 0),
+    left: position.x + dragOffset.x,
+    top: position.y + dragOffset.y,
   };
 
   return (
@@ -147,7 +145,9 @@ const InteractiveSchemaCard: React.FC<InteractiveSchemaCardProps> = React.memo((
               }`}
               onMouseDown={(e) => {
                   // Only allow starting a join drag from the right edge of the column item
-                  if (e.currentTarget.clientWidth - e.nativeEvent.offsetX < 30) {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const relativeX = e.clientX - rect.left;
+                  if (e.currentTarget.clientWidth - relativeX < 30) {
                       e.preventDefault(); 
                       e.stopPropagation(); 
                       onColumnMouseDown(tableName, col.name);
